@@ -1,0 +1,320 @@
+const express = require('express');
+const { createServer } = require('http');
+const { Server } = require('socket.io');
+const firebaseAdmin = require('firebase-admin');
+const nodemailer = require('nodemailer');
+const cors = require('cors');
+const path = require('path');
+require('dotenv').config();
+
+// Initialize Firebase Admin with service account
+const serviceAccount = require('./firebase-config.json');
+firebaseAdmin.initializeApp({
+  credential: firebaseAdmin.credential.cert(serviceAccount)
+});
+
+const app = express();
+const httpServer = createServer(app);
+const io = new Server(httpServer, {
+  cors: {
+    origin: process.env.NODE_ENV === 'production' 
+      ? "vercel remove naya-play" 
+      : "http://localhost:3002"
+  }
+});
+
+// Middleware
+app.use(cors());
+app.use(express.json());
+
+// Email Configuration
+const transporter = nodemailer.createTransport({
+  host: process.env.ZOHO_MAIL_HOST || 'smtppro.zoho.eu',
+  port: parseInt(process.env.ZOHO_MAIL_PORT || '465'),
+  secure: true,
+  auth: {
+    user: process.env.ZOHO_MAIL_USER || 'noreply@nayaplay.co',
+    pass: process.env.ZOHO_MAIL_PASSWORD
+  },
+  debug: true
+});
+
+// Verify SMTP connection
+transporter.verify(function(error, success) {
+  if (error) {
+    console.error('SMTP Verification Error:', error);
+  } else {
+    console.log("Server is ready to send emails");
+  }
+});
+
+// Generate verification code
+function generateVerificationCode() {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+// Game state variables
+let currentGame = null;
+let gameInterval = null;
+
+const calculateCrashPoint = () => {
+  const random = Math.random();
+  if (random < 0.60) return 1.1 + (Math.random() * 0.9);
+  if (random < 0.85) return 2 + (Math.random() * 1);
+  if (random < 0.95) return 3 + (Math.random() * 2);
+  return 5 + (Math.random() * 5);
+};
+
+const startNewGame = () => {
+  currentGame = {
+    id: Date.now(),
+    state: 'betting',
+    countdown: 10,
+    crashPoint: calculateCrashPoint(),
+    multiplier: 1.00,
+    players: new Map(),
+    startedAt: null
+  };
+
+  io.emit('game_starting', { 
+    id: currentGame.id,
+    countdown: currentGame.countdown
+  });
+
+  let countdownInterval = setInterval(() => {
+    currentGame.countdown--;
+    io.emit('countdown', currentGame.countdown);
+
+    if (currentGame.countdown <= 0) {
+      clearInterval(countdownInterval);
+      startPlaying();
+    }
+  }, 1000);
+};
+
+const startPlaying = () => {
+  currentGame.state = 'playing';
+  currentGame.startedAt = Date.now();
+  io.emit('game_started', { id: currentGame.id });
+
+  gameInterval = setInterval(() => {
+    currentGame.multiplier += 0.01;
+    io.emit('multiplier_update', currentGame.multiplier);
+
+    if (currentGame.multiplier >= currentGame.crashPoint) {
+      handleCrash();
+    }
+  }, 50);
+};
+
+const handleCrash = () => {
+  clearInterval(gameInterval);
+  currentGame.state = 'crashed';
+  io.emit('game_crashed', { 
+    crashPoint: currentGame.multiplier,
+    players: Array.from(currentGame.players.values())
+  });
+
+  setTimeout(startNewGame, 3000);
+};
+
+// Socket.IO connections
+io.on('connection', (socket) => {
+  if (currentGame) {
+    socket.emit('game_state', currentGame);
+  }
+
+  socket.on('place_bet', async ({ userId, amount }) => {
+    if (currentGame && currentGame.state === 'betting') {
+      currentGame.players.set(userId, {
+        userId,
+        betAmount: amount,
+        status: 'playing'
+      });
+      io.emit('bet_placed', { userId, amount });
+    }
+  });
+
+  socket.on('cash_out', ({ userId }) => {
+    if (currentGame && currentGame.state === 'playing') {
+      const player = currentGame.players.get(userId);
+      if (player && player.status === 'playing') {
+        player.status = 'cashed_out';
+        player.cashoutMultiplier = currentGame.multiplier;
+        player.winAmount = player.betAmount * currentGame.multiplier;
+        io.emit('player_cashed_out', player);
+      }
+    }
+  });
+});
+// Email verification endpoint
+// Email verification endpoint
+app.post('/api/generate-verification', async (req, res) => {
+  console.log('Generate verification request:', req.body);
+  const { email, userId, username } = req.body;
+  
+  try {
+    // Generate verification code
+    const verificationCode = generateVerificationCode();
+    console.log('Generated code for user:', { userId, code: verificationCode });
+
+    // Store in Firestore
+    await firebaseAdmin.firestore()
+      .collection('verificationCodes')
+      .doc(userId)  // Use userId as document ID
+      .set({
+        code: verificationCode,
+        email,
+        userId,
+        createdAt: firebaseAdmin.firestore.FieldValue.serverTimestamp(),
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000)
+      });
+
+    // Send email
+    const info = await transporter.sendMail({
+      from: '"NayaPlay" <noreply@nayaplay.co>',
+      to: email,
+      subject: 'Verify Your NayaPlay Account',
+      html: `
+        <div style="background-color: #1a1b1e; color: #ffffff; padding: 20px; border-radius: 10px;">
+          <h1 style="color: #4f46e5;">Welcome to NayaPlay!</h1>
+          <p>Hello ${username},</p>
+          <p>Your verification code is:</p>
+          <div style="background-color: #2d2e33; padding: 20px; border-radius: 5px; text-align: center; margin: 20px 0;">
+            <span style="font-size: 32px; letter-spacing: 5px; font-family: monospace;">${verificationCode}</span>
+          </div>
+          <p>This code will expire in 10 minutes.</p>
+        </div>
+      `
+    });
+
+    console.log('Verification email sent:', info.messageId);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error generating verification:', error);
+    res.status(500).json({ error: 'Failed to send verification email' });
+  }
+});
+
+// Verify code endpoint
+app.post('/api/verify-code', async (req, res) => {
+  console.log('Verify code request:', req.body);
+  const { code, userId } = req.body;
+
+  if (!code || !userId) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  try {
+    // Get verification code document
+    const docRef = await firebaseAdmin.firestore()
+      .collection('verificationCodes')
+      .doc(userId)
+      .get();
+
+    if (!docRef.exists) {
+      console.log('No verification code found for user:', userId);
+      return res.status(400).json({ error: 'Invalid verification code' });
+    }
+
+    const data = docRef.data();
+    console.log('Found verification data:', data);
+
+    // Check expiration
+    if (Date.now() > data.expiresAt.toDate().getTime()) {
+      return res.status(400).json({ error: 'Verification code expired' });
+    }
+
+    // Check code
+    if (data.code !== code) {
+      return res.status(400).json({ error: 'Invalid verification code' });
+    }
+
+    // Update user
+    await firebaseAdmin.firestore()
+      .collection('users')
+      .doc(userId)
+      .update({
+        emailVerified: true,
+        verifiedAt: firebaseAdmin.firestore.FieldValue.serverTimestamp()
+      });
+
+    // Delete verification code
+    await docRef.ref.delete();
+
+    console.log('Verification successful for user:', userId);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Verification error:', error);
+    res.status(500).json({ error: 'Failed to verify code' });
+  }
+});
+
+
+// Crypto webhook endpoint
+app.post('/api/crypto-webhook', async (req, res) => {
+  const { payment_id, payment_status, pay_amount, actually_paid, outcome_amount } = req.body;
+  console.log('Received webhook:', req.body);
+
+  try {
+    // Find transaction by payment_id
+    const transactionsRef = firebaseAdmin.firestore().collection('transactions');
+    const snapshot = await transactionsRef
+      .where('paymentId', '==', payment_id)
+      .get();
+
+    if (!snapshot.empty) {
+      const transaction = snapshot.docs[0];
+      const transactionData = transaction.data();
+
+      // Update transaction
+      await transaction.ref.update({
+        status: payment_status,
+        receivedAmount: actually_paid,
+        finalAmount: outcome_amount,
+        updatedAt: firebaseAdmin.firestore.FieldValue.serverTimestamp()
+      });
+
+      // If payment is completed, update user's balance
+      if (payment_status === 'finished' || payment_status === 'confirmed') {
+        await firebaseAdmin.firestore()
+          .collection('users')
+          .doc(transactionData.userId)
+          .update({
+            balance: firebaseAdmin.firestore.FieldValue.increment(Number(outcome_amount))
+          });
+      }
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error processing webhook:', error);
+    res.status(500).json({ error: 'Failed to process webhook' });
+  }
+});
+
+// Debug endpoint
+app.get('/test', (req, res) => {
+  res.json({ 
+    message: 'Server is running',
+    emailConfig: {
+      host: process.env.ZOHO_MAIL_HOST,
+      port: process.env.ZOHO_MAIL_PORT,
+      user: process.env.ZOHO_MAIL_USER
+    }
+  });
+});
+
+// Start first game
+startNewGame();
+
+// Start server
+const PORT = process.env.PORT || 3003; // Update default port
+httpServer.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+  console.log('Email configuration loaded:', {
+    host: process.env.ZOHO_MAIL_HOST,
+    port: process.env.ZOHO_MAIL_PORT,
+    user: process.env.ZOHO_MAIL_USER
+  });
+});

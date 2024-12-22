@@ -1,0 +1,23 @@
+{
+  "dev": {
+    "awscloudformation": {
+      "AuthRoleName": "amplify-nayaplay-dev-18cc4-authRole",
+      "UnauthRoleArn": "arn:aws:iam::235494784782:role/amplify-nayaplay-dev-18cc4-unauthRole",
+      "AuthRoleArn": "arn:aws:iam::235494784782:role/amplify-nayaplay-dev-18cc4-authRole",
+      "Region": "ap-south-1",
+      "DeploymentBucketName": "amplify-nayaplay-dev-18cc4-deployment",
+      "UnauthRoleName": "amplify-nayaplay-dev-18cc4-unauthRole",
+      "StackName": "amplify-nayaplay-dev-18cc4",
+      "StackId": "arn:aws:cloudformation:ap-south-1:235494784782:stack/amplify-nayaplay-dev-18cc4/71616740-bceb-11ef-8a72-02bf18b0aebb",
+      "AmplifyAppId": "d3gbazqn8zu3vg"
+    },
+    "categories": {
+      "hosting": {
+        "amplifyhosting": {
+          "appId": "d3gbazqn8zu3vg",
+          "type": "manual"
+        }
+      }
+    }
+  }
+}
