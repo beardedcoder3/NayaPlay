@@ -41,18 +41,15 @@ const io = new Server(httpServer, {
 });
 
 // Middleware
-const allowedOrigins = process.env.ALLOWED_ORIGINS 
-  ? process.env.ALLOWED_ORIGINS.split(',') 
-  : ['https://dev.d3gazqn8zu3vg.amplifyapp.com', 'http://localhost:3002'];
+const allowedOrigins = [
+  'https://dev.d3gbazqn8zu3vg.amplifyapp.com',
+  'http://localhost:3002',
+  'https://nayaplay.co',
+  'https://www.nayaplay.co'
+];
 
 app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
+  origin: allowedOrigins,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
@@ -182,50 +179,65 @@ io.on('connection', (socket) => {
 });
 // Email verification endpoint
 // Email verification endpoint
-app.post('/api/generate-verification', async (req, res) => {
-  console.log('Generate verification request:', req.body);
-  const { email, userId, username } = req.body;
-  
+
+app.post('/api/verify-code', async (req, res) => {
+  console.log('Verify code request:', req.body);
+  const { code, userId } = req.body;
+
+  if (!code || !userId) {
+    console.log('Missing fields:', { code, userId });
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
   try {
-    // Generate verification code
-    const verificationCode = generateVerificationCode();
-    console.log('Generated code for user:', { userId, code: verificationCode });
-
-    // Store in Firestore
-    await firebaseAdmin.firestore()
+    // Get verification code document
+    const docRef = await firebaseAdmin.firestore()
       .collection('verificationCodes')
-      .doc(userId)  // Use userId as document ID
-      .set({
-        code: verificationCode,
-        email,
-        userId,
-        createdAt: firebaseAdmin.firestore.FieldValue.serverTimestamp(),
-        expiresAt: new Date(Date.now() + 10 * 60 * 1000)
-      });
+      .doc(userId)
+      .get();
 
-    // Send email
-    const info = await transporter.sendMail({
-      from: '"NayaPlay" <noreply@nayaplay.co>',
-      to: email,
-      subject: 'Verify Your NayaPlay Account',
-      html: `
-        <div style="background-color: #1a1b1e; color: #ffffff; padding: 20px; border-radius: 10px;">
-          <h1 style="color: #4f46e5;">Welcome to NayaPlay!</h1>
-          <p>Hello ${username},</p>
-          <p>Your verification code is:</p>
-          <div style="background-color: #2d2e33; padding: 20px; border-radius: 5px; text-align: center; margin: 20px 0;">
-            <span style="font-size: 32px; letter-spacing: 5px; font-family: monospace;">${verificationCode}</span>
-          </div>
-          <p>This code will expire in 10 minutes.</p>
-        </div>
-      `
+    if (!docRef.exists) {
+      console.log('No verification code found for user:', userId);
+      return res.status(400).json({ error: 'Invalid verification code' });
+    }
+
+    const data = docRef.data();
+    console.log('Comparing codes:', {
+      provided: code,
+      stored: data.code,
+      match: data.code === code
     });
 
-    console.log('Verification email sent:', info.messageId);
+    // Check code first (before expiration)
+    if (data.code !== code) {
+      console.log('Code mismatch');
+      return res.status(400).json({ error: 'Invalid verification code' });
+    }
+
+    // Then check expiration
+    if (Date.now() > data.expiresAt.toDate().getTime()) {
+      console.log('Code expired');
+      return res.status(400).json({ error: 'Verification code expired' });
+    }
+
+    // Update user
+    console.log('Updating user verification status');
+    await firebaseAdmin.firestore()
+      .collection('users')
+      .doc(userId)
+      .update({
+        emailVerified: true,
+        verifiedAt: firebaseAdmin.firestore.FieldValue.serverTimestamp()
+      });
+
+    // Delete verification code
+    await docRef.ref.delete();
+
+    console.log('Verification successful');
     res.json({ success: true });
   } catch (error) {
-    console.error('Error generating verification:', error);
-    res.status(500).json({ error: 'Failed to send verification email' });
+    console.error('Verification error:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 
