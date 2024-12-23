@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { collection, query, where, getDocs, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { db } from './firebase';
 
 const VerificationRoute = () => {
   const [code, setCode] = useState(['', '', '', '', '', '']);
@@ -33,12 +35,13 @@ const VerificationRoute = () => {
   const handleSubmit = async () => {
     const verificationCode = code.join('');
     const storedUserId = localStorage.getItem('userId');
-
+  
     setLoading(true);
     setError('');
-
+  
     try {
-      const response = await fetch('/api/verify-code', {
+      // Call your API first
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/verify-code`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -48,13 +51,14 @@ const VerificationRoute = () => {
           userId: storedUserId
         })
       });
-
+  
       const data = await response.json();
-
+  
       if (!response.ok) {
         throw new Error(data.error || 'Verification failed');
       }
-
+  
+      // If API call succeeds, proceed with local updates
       localStorage.setItem('emailVerified', 'true');
       localStorage.removeItem('requiresVerification');
       localStorage.removeItem('userEmail');
@@ -62,7 +66,7 @@ const VerificationRoute = () => {
       navigate('/app', { replace: true });
     } catch (error) {
       console.error('Verification error:', error);
-      setError(error.message);
+      setError(error.message || 'Invalid verification code');
     } finally {
       setLoading(false);
     }

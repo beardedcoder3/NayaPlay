@@ -247,35 +247,42 @@ app.post('/api/verify-code', async (req, res) => {
   const { code, userId } = req.body;
 
   if (!code || !userId) {
-    return res.status(400).json({ error: 'Missing required fields' });
+    return res.status(400).json({ 
+      success: false,
+      error: 'Missing required fields' 
+    });
   }
 
   try {
-    // Get verification code document
     const docRef = await firebaseAdmin.firestore()
       .collection('verificationCodes')
       .doc(userId)
       .get();
 
     if (!docRef.exists) {
-      console.log('No verification code found for user:', userId);
-      return res.status(400).json({ error: 'Invalid verification code' });
+      return res.status(400).json({ 
+        success: false,
+        error: 'Invalid verification code' 
+      });
     }
 
     const data = docRef.data();
-    console.log('Found verification data:', data);
-
-    // Check expiration
-    if (Date.now() > data.expiresAt.toDate().getTime()) {
-      return res.status(400).json({ error: 'Verification code expired' });
-    }
-
-    // Check code
+    
     if (data.code !== code) {
-      return res.status(400).json({ error: 'Invalid verification code' });
+      return res.status(400).json({ 
+        success: false,
+        error: 'Invalid verification code' 
+      });
     }
 
-    // Update user
+    if (Date.now() > data.expiresAt.toDate().getTime()) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'Verification code expired' 
+      });
+    }
+
+    // Update user and delete code
     await firebaseAdmin.firestore()
       .collection('users')
       .doc(userId)
@@ -284,14 +291,19 @@ app.post('/api/verify-code', async (req, res) => {
         verifiedAt: firebaseAdmin.firestore.FieldValue.serverTimestamp()
       });
 
-    // Delete verification code
     await docRef.ref.delete();
 
-    console.log('Verification successful for user:', userId);
-    res.json({ success: true });
+    return res.json({ 
+      success: true,
+      message: 'Verification successful' 
+    });
+    
   } catch (error) {
     console.error('Verification error:', error);
-    res.status(500).json({ error: 'Failed to verify code' });
+    return res.status(500).json({ 
+      success: false,
+      error: 'Failed to verify code' 
+    });
   }
 });
 
