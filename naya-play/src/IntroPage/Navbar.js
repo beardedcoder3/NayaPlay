@@ -443,7 +443,7 @@ const NavBar = () => {
   
       console.log('Making request to:', `${process.env.REACT_APP_API_URL}/api/generate-verification`);
       
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/generate-verification`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/generate-verification`, {  // NOT verify-code
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -453,6 +453,7 @@ const NavBar = () => {
           userId: user.uid,
           username
         }),
+  
         mode: 'cors',  // Add this
         credentials: 'include'  // Add this
       });

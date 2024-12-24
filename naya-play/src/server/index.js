@@ -7,11 +7,7 @@ const cors = require('cors');
 const path = require('path');
 require('dotenv').config();
 
-// Initialize Firebase Admin with service account
-// Remove this line
-// const serviceAccount = require('./firebase-config.json');
-
-// Add this instead
+// Initialize Firebase Admin with environment variables
 const serviceAccount = {
   type: process.env.FIREBASE_TYPE,
   project_id: process.env.FIREBASE_PROJECT_ID,
@@ -33,6 +29,7 @@ firebaseAdmin.initializeApp({
 const app = express();
 const httpServer = createServer(app);
 
+// Socket.IO setup
 const io = new Server(httpServer, {
   cors: {
     origin: ['https://dev.d3gbazqn8zu3vg.amplifyapp.com', 'http://localhost:3002', 'https://nayaplay.co', 'https://www.nayaplay.co'],
@@ -42,9 +39,8 @@ const io = new Server(httpServer, {
 });
 
 // Middleware
-// Replace with this simpler CORS setup
 app.use(cors({
-  origin: true,  // Allow all origins for now
+  origin: true,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
@@ -73,7 +69,7 @@ transporter.verify(function(error, success) {
   }
 });
 
-// Generate verification code
+// Helper Functions
 function generateVerificationCode() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
@@ -143,7 +139,7 @@ const handleCrash = () => {
   setTimeout(startNewGame, 3000);
 };
 
-// Socket.IO connections
+// Socket.IO Event Handlers
 io.on('connection', (socket) => {
   if (currentGame) {
     socket.emit('game_state', currentGame);
@@ -172,71 +168,54 @@ io.on('connection', (socket) => {
     }
   });
 });
-// Email verification endpoint
-// Email verification endpoint
 
-app.post('/api/verify-code', async (req, res) => {
-  console.log('Verify code request:', req.body);
-  const { code, userId } = req.body;
-
-  if (!code || !userId) {
-    console.log('Missing fields:', { code, userId });
-    return res.status(400).json({ error: 'Missing required fields' });
-  }
-
+// API Routes
+// Generate Verification Code Endpoint
+app.post('/api/generate-verification', async (req, res) => {
+  console.log('Generate verification request:', req.body);
+  const { email, userId, username } = req.body;
+  
   try {
-    // Get verification code document
-    const docRef = await firebaseAdmin.firestore()
+    const verificationCode = generateVerificationCode();
+    console.log('Generated code for user:', { userId, code: verificationCode });
+
+    await firebaseAdmin.firestore()
       .collection('verificationCodes')
       .doc(userId)
-      .get();
-
-    if (!docRef.exists) {
-      console.log('No verification code found for user:', userId);
-      return res.status(400).json({ error: 'Invalid verification code' });
-    }
-
-    const data = docRef.data();
-    console.log('Comparing codes:', {
-      provided: code,
-      stored: data.code,
-      match: data.code === code
-    });
-
-    // Check code first (before expiration)
-    if (data.code !== code) {
-      console.log('Code mismatch');
-      return res.status(400).json({ error: 'Invalid verification code' });
-    }
-
-    // Then check expiration
-    if (Date.now() > data.expiresAt.toDate().getTime()) {
-      console.log('Code expired');
-      return res.status(400).json({ error: 'Verification code expired' });
-    }
-
-    // Update user
-    console.log('Updating user verification status');
-    await firebaseAdmin.firestore()
-      .collection('users')
-      .doc(userId)
-      .update({
-        emailVerified: true,
-        verifiedAt: firebaseAdmin.firestore.FieldValue.serverTimestamp()
+      .set({
+        code: verificationCode,
+        email,
+        userId,
+        createdAt: firebaseAdmin.firestore.FieldValue.serverTimestamp(),
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000)
       });
 
-    // Delete verification code
-    await docRef.ref.delete();
+    const info = await transporter.sendMail({
+      from: '"NayaPlay" <noreply@nayaplay.co>',
+      to: email,
+      subject: 'Verify Your NayaPlay Account',
+      html: `
+        <div style="background-color: #1a1b1e; color: #ffffff; padding: 20px; border-radius: 10px;">
+          <h1 style="color: #4f46e5;">Welcome to NayaPlay!</h1>
+          <p>Hello ${username},</p>
+          <p>Your verification code is:</p>
+          <div style="background-color: #2d2e33; padding: 20px; border-radius: 5px; text-align: center; margin: 20px 0;">
+            <span style="font-size: 32px; letter-spacing: 5px; font-family: monospace;">${verificationCode}</span>
+          </div>
+          <p>This code will expire in 10 minutes.</p>
+        </div>
+      `
+    });
 
-    console.log('Verification successful');
+    console.log('Verification email sent:', info.messageId);
     res.json({ success: true });
   } catch (error) {
-    console.error('Verification error:', error);
-    res.status(500).json({ error: error.message });
+    console.error('Error generating verification:', error);
+    res.status(500).json({ error: 'Failed to send verification email' });
   }
 });
 
-// Verify code endpoint
+// Verify Code Endpoint
 app.post('/api/verify-code', async (req, res) => {
   console.log('Verify code request:', req.body);
   const { code, userId } = req.body;
@@ -277,7 +256,6 @@ app.post('/api/verify-code', async (req, res) => {
       });
     }
 
-    // Update user and delete code
     await firebaseAdmin.firestore()
       .collection('users')
       .doc(userId)
@@ -302,14 +280,12 @@ app.post('/api/verify-code', async (req, res) => {
   }
 });
 
-
-// Crypto webhook endpoint
+// Crypto Webhook Endpoint
 app.post('/api/crypto-webhook', async (req, res) => {
   const { payment_id, payment_status, pay_amount, actually_paid, outcome_amount } = req.body;
   console.log('Received webhook:', req.body);
 
   try {
-    // Find transaction by payment_id
     const transactionsRef = firebaseAdmin.firestore().collection('transactions');
     const snapshot = await transactionsRef
       .where('paymentId', '==', payment_id)
@@ -319,7 +295,6 @@ app.post('/api/crypto-webhook', async (req, res) => {
       const transaction = snapshot.docs[0];
       const transactionData = transaction.data();
 
-      // Update transaction
       await transaction.ref.update({
         status: payment_status,
         receivedAmount: actually_paid,
@@ -327,7 +302,6 @@ app.post('/api/crypto-webhook', async (req, res) => {
         updatedAt: firebaseAdmin.firestore.FieldValue.serverTimestamp()
       });
 
-      // If payment is completed, update user's balance
       if (payment_status === 'finished' || payment_status === 'confirmed') {
         await firebaseAdmin.firestore()
           .collection('users')
@@ -345,7 +319,7 @@ app.post('/api/crypto-webhook', async (req, res) => {
   }
 });
 
-// Debug endpoint
+// Debug Endpoint
 app.get('/test', (req, res) => {
   res.json({ 
     message: 'Server is running',
@@ -361,7 +335,7 @@ app.get('/test', (req, res) => {
 startNewGame();
 
 // Start server
-const PORT = process.env.PORT || 3003; // Update default port
+const PORT = process.env.PORT || 3003;
 httpServer.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log('Email configuration loaded:', {
