@@ -340,15 +340,8 @@ const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TO
 // Send OTP
 // Send OTP
 app.post('/api/send-phone-verification', async (req, res) => {
-  console.log('Phone verification request:', req.body); // Add this log
   const { phoneNumber } = req.body;
-  
-  if (!phoneNumber) {
-    return res.status(400).json({ 
-      success: false, 
-      error: 'Phone number is required' 
-    });
-  }
+  console.log('Sending verification to:', phoneNumber);
   
   try {
     const verification = await client.verify.v2
@@ -359,21 +352,19 @@ app.post('/api/send-phone-verification', async (req, res) => {
         channel: 'sms'
       });
 
-    console.log('Twilio response:', verification); // Add this log
     res.json({ 
       success: true, 
       status: verification.status 
     });
   } catch (error) {
-    console.error('Error sending verification:', error);
+    console.error('Verification error:', error);
     res.status(500).json({ 
       success: false, 
-      error: error.message || 'Failed to send verification code'
+      error: error.message 
     });
   }
 });
 
-// Verify OTP
 app.post('/api/verify-phone-code', async (req, res) => {
   const { phoneNumber, code } = req.body;
   
@@ -386,19 +377,12 @@ app.post('/api/verify-phone-code', async (req, res) => {
         code: code
       });
 
-    if (verification.status === 'approved') {
-      res.json({ 
-        success: true,
-        message: 'Phone number verified successfully'
-      });
-    } else {
-      res.status(400).json({ 
-        success: false,
-        error: 'Invalid verification code'
-      });
-    }
+    res.json({ 
+      success: true,
+      verified: verification.status === 'approved'
+    });
   } catch (error) {
-    console.error('Error verifying code:', error);
+    console.error('Code verification error:', error);
     res.status(500).json({ 
       success: false, 
       error: error.message 
