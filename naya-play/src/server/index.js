@@ -331,6 +331,82 @@ app.get('/test', (req, res) => {
   });
 });
 
+
+const twilio = require('twilio');
+const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+
+// Add these new routes after your existing routes
+
+// Send OTP
+// Send OTP
+app.post('/api/send-phone-verification', async (req, res) => {
+  console.log('Phone verification request:', req.body); // Add this log
+  const { phoneNumber } = req.body;
+  
+  if (!phoneNumber) {
+    return res.status(400).json({ 
+      success: false, 
+      error: 'Phone number is required' 
+    });
+  }
+  
+  try {
+    const verification = await client.verify.v2
+      .services(process.env.TWILIO_VERIFY_SERVICE_SID)
+      .verifications
+      .create({
+        to: phoneNumber,
+        channel: 'sms'
+      });
+
+    console.log('Twilio response:', verification); // Add this log
+    res.json({ 
+      success: true, 
+      status: verification.status 
+    });
+  } catch (error) {
+    console.error('Error sending verification:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Failed to send verification code'
+    });
+  }
+});
+
+// Verify OTP
+app.post('/api/verify-phone-code', async (req, res) => {
+  const { phoneNumber, code } = req.body;
+  
+  try {
+    const verification = await client.verify.v2
+      .services(process.env.TWILIO_VERIFY_SERVICE_SID)
+      .verificationChecks
+      .create({
+        to: phoneNumber,
+        code: code
+      });
+
+    if (verification.status === 'approved') {
+      res.json({ 
+        success: true,
+        message: 'Phone number verified successfully'
+      });
+    } else {
+      res.status(400).json({ 
+        success: false,
+        error: 'Invalid verification code'
+      });
+    }
+  } catch (error) {
+    console.error('Error verifying code:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+
 // Start first game
 startNewGame();
 

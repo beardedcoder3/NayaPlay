@@ -16,6 +16,9 @@ import { useChat } from '../Chat/ChatContext';
 import Chat from '../Chat/Chat';
 import { useRef } from 'react';
 import checkVerificationStatus from "../Auth/useAuth"
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import debounce from 'lodash/debounce';
+import { Calendar, Phone, Lock, EyeOff, Eye } from 'lucide-react';
 
 
 // GameSearch Component
@@ -179,105 +182,290 @@ const VerificationModal = ({ email, onClose }) => {
   );
 };
 // Register Modal Component
-const RegisterModal = ({ onSubmit, onClose }) => {
+
+// Register Modal Component
+ export const RegisterModal = ({ onSubmit, onClose }) => {
   const [formData, setFormData] = useState({
     email: '',
     username: '',
     password: '',
+    confirmPassword: '',
     dateOfBirth: '',
     phone: ''
   });
+  
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [usernameStatus, setUsernameStatus] = useState({
+    isChecking: false,
+    isAvailable: null,
+    message: ''
+  });
+  const [passwordStrength, setPasswordStrength] = useState({
+    score: 0,
+    feedback: ''
+  });
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value
-    }));
+  // Password validation
+  const validatePassword = (password) => {
+    let score = 0;
+    let feedback = [];
+
+    if (password.length >= 8) score++;
+    else feedback.push('At least 8 characters');
+
+    if (/[A-Z]/.test(password)) score++;
+    else feedback.push('One uppercase letter');
+
+    if (/[a-z]/.test(password)) score++;
+    else feedback.push('One lowercase letter');
+
+    if (/[0-9]/.test(password)) score++;
+    else feedback.push('One number');
+
+    if (/[^A-Za-z0-9]/.test(password)) score++;
+    else feedback.push('One special character');
+
+    return {
+      score,
+      feedback: feedback.join(' • ')
+    };
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    onSubmit(formData);
-  };
-
-  return (
-    <div className="bg-gray-900 rounded-2xl w-full max-w-md p-8 shadow-2xl border border-gray-800">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-3xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
-          Create Account
-        </h2>
-        <button onClick={onClose} className="p-2 hover:bg-gray-800 rounded-full transition-colors">
-          <X size={20} className="text-gray-400 hover:text-gray-300" />
-        </button>
-      </div>
-
-      <p className="text-gray-400 mb-8">Join the ultimate gaming experience</p>
-
-      <form onSubmit={handleSubmit} className="space-y-5">
-        <div className="space-y-1">
-          <input
-            type="email"
-            name="email"
-            value={formData.email}
-            onChange={handleChange}
-            placeholder="Email"
-            required
-            className="w-full bg-gray-800/50 text-white px-4 py-3 rounded-xl border border-gray-700 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all outline-none placeholder:text-gray-500"
-          />
+    // Username availability check
+    const checkUsername = debounce(async (username) => {
+      if (!username || username.length < 3) {
+        setUsernameStatus({
+          isChecking: false,
+          isAvailable: null,
+          message: username ? 'Username must be at least 3 characters' : ''
+        });
+        return;
+      }
+  
+      setUsernameStatus(prev => ({ ...prev, isChecking: true }));
+  
+      try {
+        const usersRef = collection(db, 'users');
+        const q = query(usersRef, where('username', '==', username.toLowerCase()));
+        const querySnapshot = await getDocs(q);
+  
+        setUsernameStatus({
+          isChecking: false,
+          isAvailable: querySnapshot.empty,
+          message: querySnapshot.empty ? 'Username is available' : 'Username is already taken'
+        });
+      } catch (error) {
+        setUsernameStatus({
+          isChecking: false,
+          isAvailable: false,
+          message: 'Error checking username availability'
+        });
+      }
+    }, 500);
+  
+    const handleChange = (e) => {
+      const { name, value } = e.target;
+      setFormData(prev => ({
+        ...prev,
+        [name]: value
+      }));
+  
+      if (name === 'username') {
+        checkUsername(value);
+      }
+  
+      if (name === 'password') {
+        setPasswordStrength(validatePassword(value));
+      }
+  
+      setError('');
+    };
+  
+    const handleSubmit = async (e) => {
+      e.preventDefault();
+      setLoading(true);
+      setError('');
+  
+      // Validation checks
+      if (formData.password !== formData.confirmPassword) {
+        setError('Passwords do not match');
+        setLoading(false);
+        return;
+      }
+  
+      if (passwordStrength.score < 3) {
+        setError('Please choose a stronger password');
+        setLoading(false);
+        return;
+      }
+  
+      try {
+        const { confirmPassword, ...submitData } = formData;
+        await onSubmit(submitData);
+      } catch (error) {
+        setError(error.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+  
+    const getPasswordStrengthColor = (score) => {
+      if (score <= 2) return 'bg-red-500';
+      if (score <= 3) return 'bg-yellow-500';
+      if (score <= 4) return 'bg-green-500';
+      return 'bg-emerald-500';
+    };
+  
+    return (
+      <div className="bg-gray-900 rounded-2xl w-full max-w-md p-8 shadow-2xl border border-gray-800">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-3xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
+            Create Account
+          </h2>
+          <button onClick={onClose} className="p-2 hover:bg-gray-800 rounded-full transition-colors">
+            <X size={20} className="text-gray-400 hover:text-gray-300" />
+          </button>
         </div>
-
-        <div className="space-y-1">
-          <input
-            type="text"
-            name="username"
-            value={formData.username}
-            onChange={handleChange}
-            placeholder="Username"
-            required
-            className="w-full bg-gray-800/50 text-white px-4 py-3 rounded-xl border border-gray-700 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all outline-none placeholder:text-gray-500"
-          />
-        </div>
-
-        <div className="space-y-1">
-          <input
-            type="password"
-            name="password"
-            value={formData.password}
-            onChange={handleChange}
-            placeholder="Password"
-            required
-            className="w-full bg-gray-800/50 text-white px-4 py-3 rounded-xl border border-gray-700 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all outline-none placeholder:text-gray-500"
-          />
-        </div>
-
-        <div className="space-y-1">
-          <input
-            type="date"
-            name="dateOfBirth"
-            value={formData.dateOfBirth}
-            onChange={handleChange}
-            required
-            className="w-full bg-gray-800/50 text-white px-4 py-3 rounded-xl border border-gray-700 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all outline-none placeholder:text-gray-500"
-          />
-        </div>
-
-        <div className="space-y-1">
+  
+        <p className="text-gray-400 mb-8">Join the ultimate gaming experience</p>
+  
+        {error && (
+          <div className="mb-6 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400">
+            {error}
+          </div>
+        )}
+  
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div className="relative">
+            <div className="absolute left-3 top-3 text-gray-400">
+              <Mail size={18} />
+            </div>
+            <input
+              type="email"
+              name="email"
+              value={formData.email}
+              onChange={handleChange}
+              placeholder="Email"
+              required
+              className="w-full bg-gray-800/50 text-white pl-10 py-3 rounded-xl border border-gray-700 
+                focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all outline-none 
+                placeholder:text-gray-500"
+            />
+          </div>
+  
+          <div className="relative">
+            <div className="absolute left-3 top-3 text-gray-400">
+              <User size={18} />
+            </div>
+            <input
+              type="text"
+              name="username"
+              value={formData.username}
+              onChange={handleChange}
+              placeholder="Username"
+              required
+              className={`w-full bg-gray-800/50 text-white pl-10 py-3 rounded-xl border 
+                ${formData.username ? 
+                  usernameStatus.isChecking ? 'border-yellow-500' :
+                  usernameStatus.isAvailable ? 'border-green-500' : 'border-red-500'
+                  : 'border-gray-700'} 
+                focus:ring-1 focus:ring-indigo-500 transition-all outline-none 
+                placeholder:text-gray-500`}
+            />
+            {formData.username && (
+              <div className={`absolute right-3 top-3.5 flex items-center space-x-2 text-sm
+                ${usernameStatus.isChecking ? 'text-yellow-500' : 
+                  usernameStatus.isAvailable ? 'text-green-500' : 'text-red-500'}`}>
+                {usernameStatus.isChecking ? (
+                  <div className="animate-spin h-4 w-4 border-2 border-yellow-500 rounded-full border-t-transparent" />
+                ) : (
+                  <span>{usernameStatus.message}</span>
+                )}
+              </div>
+            )}
+          </div>
+  
+          <div className="space-y-3">
+            <PasswordInput
+              value={formData.password}
+              onChange={handleChange}
+              name="password"
+              placeholder="Password"
+            />
+            
+            {formData.password && (
+              <div className="space-y-2">
+                <div className="flex gap-1">
+                  {[1, 2, 3, 4, 5].map((level) => (
+                    <div
+                      key={level}
+                      className={`h-1 w-full rounded-full ${
+                        level <= passwordStrength.score
+                          ? getPasswordStrengthColor(passwordStrength.score)
+                          : 'bg-gray-700'
+                      }`}
+                    />
+                  ))}
+                </div>
+                <p className="text-xs text-gray-400">
+                  {passwordStrength.feedback || 'Password strength: Strong'}
+                </p>
+              </div>
+            )}
+  
+            <PasswordInput
+              value={formData.confirmPassword}
+              onChange={handleChange}
+              name="confirmPassword"
+              placeholder="Confirm Password"
+            />
+          </div>
+  
+          <div className="relative">
+            <div className="absolute left-3 top-3 text-gray-400">
+              <Calendar size={18} />
+            </div>
+            <input
+              type="date"
+              name="dateOfBirth"
+              value={formData.dateOfBirth}
+              onChange={handleChange}
+              required
+              className="w-full bg-gray-800/50 text-white pl-10 py-3 rounded-xl border border-gray-700 
+                focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all outline-none 
+                placeholder:text-gray-500"
+            />
+          </div>
+   <div className="relative">
+   <div className="absolute left-3 top-3 text-gray-400">
+            <Phone size={18} />
+          </div>
           <input
             type="tel"
             name="phone"
             value={formData.phone}
             onChange={handleChange}
             placeholder="Phone (Optional)"
-            className="w-full bg-gray-800/50 text-white px-4 py-3 rounded-xl border border-gray-700 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all outline-none placeholder:text-gray-500"
+            className="w-full bg-gray-800/50 text-white pl-10 py-3 rounded-xl border border-gray-700 
+              focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all outline-none 
+              placeholder:text-gray-500"
           />
         </div>
 
-        <button 
-          type="submit" 
-          className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-3 rounded-xl font-medium hover:from-indigo-500 hover:to-purple-500 transition-all duration-200 transform hover:scale-[1.02]"
+        <button
+          type="submit"
+          disabled={loading || !usernameStatus.isAvailable || usernameStatus.isChecking}
+          className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-3 rounded-xl 
+            font-medium hover:from-indigo-500 hover:to-purple-500 transition-all duration-200 
+            transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed 
+            disabled:transform-none flex items-center justify-center"
         >
-          Create Account
+          {loading ? (
+            <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+          ) : (
+            'Create Account'
+          )}
         </button>
 
         <p className="text-sm text-gray-400 text-center mt-6">
@@ -287,7 +475,6 @@ const RegisterModal = ({ onSubmit, onClose }) => {
     </div>
   );
 };
-
 
 // Welcome Modal Component
 const WelcomeModal = ({ onSetupWallet, onSkip }) => (
@@ -321,60 +508,163 @@ const WelcomeModal = ({ onSetupWallet, onSkip }) => (
       </div>
     </div>
   </div>
+  
 );
 
+
+// Password Input Component
+const PasswordInput = ({ value, onChange, name, placeholder = "Password", required = true }) => {
+  const [showPassword, setShowPassword] = useState(false);
+
+  return (
+    <div className="relative">
+      <div className="absolute left-3 top-3 text-gray-400">
+        <Lock size={18} />
+      </div>
+      <input
+        type={showPassword ? "text" : "password"}
+        value={value}
+        onChange={onChange}
+        name={name}
+        placeholder={placeholder}
+        required={required}
+        className="w-full bg-gray-800/50 text-white pl-10 pr-12 py-3 rounded-xl border border-gray-700 
+          focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all outline-none 
+          placeholder:text-gray-500"
+      />
+      <button
+        type="button"
+        onClick={() => setShowPassword(!showPassword)}
+        className="absolute right-3 top-3 text-gray-400 hover:text-gray-300 focus:outline-none"
+      >
+        {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+      </button>
+    </div>
+  );
+};
+
+
+
+
+// Login Modal Component
 // Login Modal Component
 const LoginModal = ({ onSubmit, onClose }) => {
   const [formData, setFormData] = useState({
     email: '',
     password: ''
   });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({
+    setFormData(prev => ({
       ...prev,
       [name]: value
     }));
+    setError('');
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    onSubmit(formData);
+    setLoading(true);
+    setError('');
+    
+    try {
+      await onSubmit(formData);
+    } catch (error) {
+      setError(error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <div className="bg-gradient-to-b from-gray-900 to-gray-800 rounded-2xl w-full max-w-md p-8 shadow-2xl">
-      <button onClick={onClose} className="absolute top-4 right-4">
-        <X size={20} className="text-gray-300" />
-      </button>
-      <h2 className="text-2xl font-bold text-white mb-4">Welcome Back</h2>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <input
-          type="email"
-          name="email"
-          value={formData.email}
-          onChange={handleChange}
-          placeholder="Email"
-          required
-          className="w-full bg-gray-800 text-white px-4 py-2 rounded"
-        />
-        <input
-          type="password"
-          name="password"
+    <div className="bg-gray-900 rounded-2xl w-full max-w-md p-8 shadow-2xl border border-gray-800">
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-3xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
+          Welcome Back
+        </h2>
+        <button 
+          onClick={onClose}
+          className="p-2 hover:bg-gray-800 rounded-full transition-colors"
+        >
+          <X size={20} className="text-gray-400 hover:text-gray-300" />
+        </button>
+      </div>
+
+      <p className="text-gray-400 mb-8">Sign in to continue your gaming journey</p>
+
+      {error && (
+        <div className="mb-6 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400">
+          {error}
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} className="space-y-5">
+        <div className="relative">
+          <div className="absolute left-3 top-3 text-gray-400">
+            <Mail size={18} />
+          </div>
+          <input
+            type="email"
+            name="email"
+            value={formData.email}
+            onChange={handleChange}
+            placeholder="Email"
+            required
+            className="w-full bg-gray-800/50 text-white pl-10 py-3 rounded-xl border border-gray-700 
+              focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all outline-none 
+              placeholder:text-gray-500"
+          />
+        </div>
+
+        <PasswordInput
           value={formData.password}
           onChange={handleChange}
+          name="password"
           placeholder="Password"
-          required
-          className="w-full bg-gray-800 text-white px-4 py-2 rounded"
         />
-        <button type="submit" className="w-full bg-indigo-600 text-white py-2 rounded hover:bg-indigo-700 transition-colors">
-          Login
+
+        <div className="flex items-center justify-between text-sm">
+          <label className="flex items-center text-gray-400">
+            <input
+              type="checkbox"
+              checked={rememberMe}
+              onChange={(e) => setRememberMe(e.target.checked)}
+              className="form-checkbox h-4 w-4 text-indigo-600 rounded border-gray-700 bg-gray-800/50 
+                focus:ring-indigo-500 focus:ring-offset-0"
+            />
+            <span className="ml-2">Remember me</span>
+          </label>
+          <button
+            type="button"
+            className="text-indigo-400 hover:text-indigo-300 transition-colors"
+          >
+            Forgot password?
+          </button>
+        </div>
+
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-3 rounded-xl 
+            font-medium hover:from-indigo-500 hover:to-purple-500 transition-all duration-200 
+            transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed 
+            disabled:transform-none flex items-center justify-center"
+        >
+          {loading ? (
+            <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+          ) : (
+            'Sign In'
+          )}
         </button>
       </form>
     </div>
   );
 };
+
 
 // Main NavBar component
 const NavBar = () => {
@@ -421,14 +711,39 @@ const NavBar = () => {
     try {
       const { email, username, password, dateOfBirth, phone } = formData;
       
+      // Final username availability check before registration
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, where('username', '==', username.toLowerCase()));
+      const querySnapshot = await getDocs(q);
+      
+      if (!querySnapshot.empty) {
+        throw new Error('Username is already taken. Please choose a different username.');
+      }
+      
       // Create auth user
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
       
+      // Calculate user's age
+      const birthDate = new Date(dateOfBirth);
+      const today = new Date();
+      let age = today.getFullYear() - birthDate.getFullYear();
+      const monthDiff = today.getMonth() - birthDate.getMonth();
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+        age--;
+      }
+  
+      // Age verification
+      if (age < 18) {
+        await user.delete(); // Delete the created auth user
+        throw new Error('You must be 18 or older to register.');
+      }
+      
       // Store user data
       await setDoc(doc(db, 'users', user.uid), {
         email,
-        username,
+        username: username.toLowerCase(), // For case-insensitive searches
+        displayUsername: username, // Preserve original case for display
         dateOfBirth,
         phone: phone || '',
         createdAt: new Date().toISOString(),
@@ -439,11 +754,13 @@ const NavBar = () => {
         totalWon: 0,
         vipLevel: 0,
         vipPoints: 0,
+        lastActive: new Date().toISOString(),
+        status: 'active',
+        ageVerified: true
       });
   
-      console.log('Making request to:', `${process.env.REACT_APP_API_URL}/api/generate-verification`);
-      
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/generate-verification`, {  // NOT verify-code
+      // Send verification email
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/generate-verification`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -453,37 +770,57 @@ const NavBar = () => {
           userId: user.uid,
           username
         }),
-  
-        mode: 'cors',  // Add this
-        credentials: 'include'  // Add this
+        mode: 'cors',
+        credentials: 'include'
       });
   
       if (!response.ok) {
-        throw new Error('Failed to send verification email');
+        throw new Error('Failed to send verification email. Please try again.');
       }
   
+      // Store necessary information in localStorage
       localStorage.setItem('requiresVerification', 'true');
       localStorage.setItem('userEmail', email);
       localStorage.setItem('userId', user.uid);
+      localStorage.setItem('registrationTime', new Date().toISOString());
       
+      // Close modal and redirect
       setModalState('closed');
       navigate('/verify-email');
       
     } catch (error) {
       console.error('Registration error:', error);
-      alert(error.message);
+      
+      // Handle specific error cases
+      if (error.code === 'auth/email-already-in-use') {
+        throw new Error('This email is already registered. Please try logging in instead.');
+      } else if (error.code === 'auth/invalid-email') {
+        throw new Error('Please enter a valid email address.');
+      } else if (error.code === 'auth/weak-password') {
+        throw new Error('Password is too weak. Please choose a stronger password.');
+      } else if (error.code === 'auth/network-request-failed') {
+        throw new Error('Network error. Please check your connection and try again.');
+      }
+      
+      // If it's our custom error, throw it as is
+      if (error.message.includes('Username') || error.message.includes('age')) {
+        throw error;
+      }
+      
+      // For any other errors
+      throw new Error('Registration failed. Please try again later.');
     }
   };
-  
 
+
+  
   const handleSetupWallet = async () => {
     try {
       if (!auth.currentUser) {
-        alert('No user found. Please try logging in again.');
-        return;
+        throw new Error('No user found. Please try logging in again.');
       }
-
-      // Check if email is already verified
+  
+      // Check email verification status
       await auth.currentUser.reload();
       if (auth.currentUser.emailVerified) {
         localStorage.setItem('setupChoice', 'wallet');
@@ -491,44 +828,46 @@ const NavBar = () => {
         window.location.reload();
         return;
       }
-
-      // Check when the last verification email was sent
+  
+      // Rate limiting for verification emails
       const lastEmailTime = localStorage.getItem('lastVerificationEmailTime');
       const now = Date.now();
+      const COOLDOWN_PERIOD = 60000; // 1 minute in milliseconds
       
-      if (lastEmailTime && now - parseInt(lastEmailTime) < 60000) {
-        const timeLeft = Math.ceil((60000 - (now - parseInt(lastEmailTime))) / 1000);
-        alert(`Please wait ${timeLeft} seconds before requesting another verification email.`);
-        return;
+      if (lastEmailTime && now - parseInt(lastEmailTime) < COOLDOWN_PERIOD) {
+        const timeLeft = Math.ceil((COOLDOWN_PERIOD - (now - parseInt(lastEmailTime))) / 1000);
+        throw new Error(`Please wait ${timeLeft} seconds before requesting another verification email.`);
       }
-
+  
+      // Send verification email
       await sendEmailVerification(auth.currentUser, {
         url: window.location.origin,
         handleCodeInApp: true,
       });
-
+  
       localStorage.setItem('lastVerificationEmailTime', now.toString());
       localStorage.setItem('setupChoice', 'wallet');
       setModalState('verification');
-
+  
     } catch (error) {
-      console.error('Error sending verification:', error);
+      console.error('Verification error:', error);
       
       if (error.code === 'auth/too-many-requests') {
-        alert('Too many verification attempts. Please wait a few minutes before trying again.');
-      } else {
-        alert('Error sending verification email. Please try again later.');
+        throw new Error('Too many verification attempts. Please wait a few minutes before trying again.');
       }
+      
+      throw error;
     }
   };
-
+  
   const handleSkip = () => {
     localStorage.setItem('setupChoice', 'skipped');
     localStorage.removeItem('requiresVerification');
     setModalState('closed');
     window.location.reload();
   };
-
+  
+  // Loading state
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">

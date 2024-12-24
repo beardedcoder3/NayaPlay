@@ -2,7 +2,7 @@
   "name": "naya-play",
   "version": "0.1.0",
   "private": true,
-    "proxy": "http://localhost:3003",
+  "proxy": "http://localhost:3003",
   "dependencies": {
     "@aws-sdk/client-s3": "^3.713.0",
     "@aws-sdk/client-ses": "^3.716.0",
@@ -29,10 +29,13 @@
     "react-dom": "^18.3.1",
     "react-router-dom": "^7.0.2",
     "react-scripts": "5.0.1",
+    "react-select": "^5.9.0",
+    "react-select-country-list": "^2.2.3",
     "socket.io": "^4.8.1",
     "socket.io-client": "^4.8.1",
     "stream-chat": "^8.46.1",
     "stream-chat-react": "^12.7.1",
+    "twilio": "^5.4.0",
     "use-sound": "^4.0.3",
     "web-vitals": "^2.1.4"
   },
