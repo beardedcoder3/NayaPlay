@@ -391,6 +391,57 @@ app.post('/api/verify-phone-code', async (req, res) => {
 });
 
 
+// Add these after your other routes but before the server start code
+app.post('/api/send-phone-verification', async (req, res) => {
+  console.log('Phone verification request:', req.body);
+  const { phoneNumber } = req.body;
+  
+  try {
+    const verification = await client.verify.v2
+      .services(process.env.TWILIO_VERIFY_SERVICE_SID)
+      .verifications.create({
+        to: phoneNumber,
+        channel: 'sms'
+      });
+
+    res.json({ 
+      success: true, 
+      status: verification.status 
+    });
+  } catch (error) {
+    console.error('Twilio error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+app.post('/api/verify-phone-code', async (req, res) => {
+  const { phoneNumber, code } = req.body;
+  
+  try {
+    const verification = await client.verify.v2
+      .services(process.env.TWILIO_VERIFY_SERVICE_SID)
+      .verificationChecks.create({
+        to: phoneNumber,
+        code: code
+      });
+
+    res.json({ 
+      success: true,
+      verified: verification.status === 'approved' 
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+
+
 // Start first game
 startNewGame();
 
