@@ -441,8 +441,7 @@ const NavBar = () => {
         vipPoints: 0,
       });
   
-      // Log full request details
-      console.log('Making request to:', 'http://localhost:3002/api/generate-verification');
+      console.log('Making request to:', `${process.env.REACT_APP_API_URL}/api/generate-verification`);
       
       const response = await fetch(`${process.env.REACT_APP_API_URL}/api/generate-verification`, {
         method: 'POST',
@@ -453,26 +452,15 @@ const NavBar = () => {
           email,
           userId: user.uid,
           username
-        })
+        }),
+        mode: 'cors',  // Add this
+        credentials: 'include'  // Add this
       });
   
-      // Log raw response
-      const rawText = await response.text();
-      console.log('Raw server response:', rawText);
-  
-      // Try to parse as JSON
-      let data;
-      try {
-        data = JSON.parse(rawText);
-      } catch (parseError) {
-        console.error('Failed to parse response as JSON:', parseError);
-        throw new Error('Server returned invalid response');
-      }
-  
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to send verification email');
+        throw new Error('Failed to send verification email');
       }
-      
+  
       localStorage.setItem('requiresVerification', 'true');
       localStorage.setItem('userEmail', email);
       localStorage.setItem('userId', user.uid);
@@ -481,12 +469,11 @@ const NavBar = () => {
       navigate('/verify-email');
       
     } catch (error) {
-      console.error('Full registration error:', error);
-      console.error('Error details:', error.message);
+      console.error('Registration error:', error);
       alert(error.message);
     }
   };
-
+  
 
   const handleSetupWallet = async () => {
     try {
