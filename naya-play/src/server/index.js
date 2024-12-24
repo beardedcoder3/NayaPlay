@@ -40,12 +40,11 @@ const io = new Server(httpServer, {
 
 // Middleware
 app.use(cors({
-  origin: true,
+  origin: ['https://dev.d3gbazqn8zu3vg.amplifyapp.com', 'http://localhost:3002', 'https://nayaplay.co', 'https://www.nayaplay.co'],
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
-
 app.use(express.json());
 
 // Email Configuration
