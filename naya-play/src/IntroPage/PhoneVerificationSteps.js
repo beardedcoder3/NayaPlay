@@ -88,25 +88,25 @@ const PhoneVerificationSteps = ({ onBack, onComplete }) => {
   setError('');
   
   try {
+    const formattedNumber = phoneData.phoneNumber.replace(/\D/g, '');
     const response = await fetch(`${process.env.REACT_APP_API_URL}/api/send-phone-verification`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      credentials: 'include',
-      body: JSON.stringify({ phoneNumber: phoneData.phoneNumber })
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        phoneNumber: `+${formattedNumber}` 
+      })
     });
 
     const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Failed to send code');
     if (data.success) setStep('otp');
+    else throw new Error(data.error);
   } catch (error) {
-    setError(error.message);
+    setError('Failed to send verification code');
   } finally {
     setLoading(false);
   }
 };
+
 
  const handleVerifyOTP = async (e) => {
    e.preventDefault();
