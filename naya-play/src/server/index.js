@@ -39,11 +39,13 @@ const io = new Server(httpServer, {
 });
 
 // Middleware
+// In server/index.js
 app.use(cors({
   origin: ['http://localhost:3002', 'https://nayaplay.co', 'https://www.nayaplay.co'],
   methods: ['GET', 'POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type'],
-  credentials: false
+  credentials: true,
+  exposedHeaders: ['Access-Control-Allow-Credentials']
 }));
 
 app.use(express.json());

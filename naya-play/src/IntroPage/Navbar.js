@@ -709,43 +709,14 @@ const NavBar = () => {
 
   const handleRegisterSubmit = async (formData) => {
     try {
-      const { email, username, password, dateOfBirth, phone } = formData;
-      
-      // Final username availability check before registration
-      const usersRef = collection(db, 'users');
-      const q = query(usersRef, where('username', '==', username.toLowerCase()));
-      const querySnapshot = await getDocs(q);
-      
-      if (!querySnapshot.empty) {
-        throw new Error('Username is already taken. Please choose a different username.');
-      }
-      
-      // Create auth user
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
       const user = userCredential.user;
-      
-      // Calculate user's age
-      const birthDate = new Date(dateOfBirth);
-      const today = new Date();
-      let age = today.getFullYear() - birthDate.getFullYear();
-      const monthDiff = today.getMonth() - birthDate.getMonth();
-      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-        age--;
-      }
   
-      // Age verification
-      if (age < 18) {
-        await user.delete(); // Delete the created auth user
-        throw new Error('You must be 18 or older to register.');
-      }
-      
-      // Store user data
       await setDoc(doc(db, 'users', user.uid), {
-        email,
-        username: username.toLowerCase(), // For case-insensitive searches
-        displayUsername: username, // Preserve original case for display
-        dateOfBirth,
-        phone: phone || '',
+        email: formData.email,
+        username: formData.username.toLowerCase(),
+        displayUsername: formData.username,
+        dateOfBirth: formData.dateOfBirth,
         createdAt: new Date().toISOString(),
         emailVerified: false,
         balance: 0,
@@ -755,63 +726,27 @@ const NavBar = () => {
         vipLevel: 0,
         vipPoints: 0,
         lastActive: new Date().toISOString(),
-        status: 'active',
-        ageVerified: true
+        status: 'active'
       });
   
       // Send verification email
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/generate-verification`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email,
-          userId: user.uid,
-          username
-        }),
-        mode: 'cors',
-        credentials: 'include'
-      });
-  
-      if (!response.ok) {
-        throw new Error('Failed to send verification email. Please try again.');
-      }
-  
-      // Store necessary information in localStorage
+      await sendEmailVerification(user);
+      
+      // Store info for email verification
       localStorage.setItem('requiresVerification', 'true');
-      localStorage.setItem('userEmail', email);
+      localStorage.setItem('userEmail', formData.email);
       localStorage.setItem('userId', user.uid);
-      localStorage.setItem('registrationTime', new Date().toISOString());
       
-      // Close modal and redirect
-      setModalState('closed');
+      // Redirect to email verification
       navigate('/verify-email');
-      
     } catch (error) {
-      console.error('Registration error:', error);
-      
-      // Handle specific error cases
       if (error.code === 'auth/email-already-in-use') {
-        throw new Error('This email is already registered. Please try logging in instead.');
-      } else if (error.code === 'auth/invalid-email') {
-        throw new Error('Please enter a valid email address.');
-      } else if (error.code === 'auth/weak-password') {
-        throw new Error('Password is too weak. Please choose a stronger password.');
-      } else if (error.code === 'auth/network-request-failed') {
-        throw new Error('Network error. Please check your connection and try again.');
+        throw new Error('Email already registered. Please login instead.');
       }
-      
-      // If it's our custom error, throw it as is
-      if (error.message.includes('Username') || error.message.includes('age')) {
-        throw error;
-      }
-      
-      // For any other errors
-      throw new Error('Registration failed. Please try again later.');
+      throw new Error('Registration failed. Please try again.');
     }
   };
-
+  
 
   
   const handleSetupWallet = async () => {

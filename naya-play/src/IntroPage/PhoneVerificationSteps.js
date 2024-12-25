@@ -137,35 +137,36 @@ const PhoneVerificationSteps = ({ onBack, onComplete }) => {
  };
 
  const handleRegistrationSubmit = async (e) => {
-   e.preventDefault();
-   setLoading(true);
-   setError('');
+  e.preventDefault();
+  setLoading(true);
+  setError('');
 
-   try {
-     if (!usernameStatus.isAvailable) {
-       throw new Error('Please choose a different username');
-     }
+  try {
+    if (!usernameStatus.isAvailable) {
+      throw new Error('Please choose a different username');
+    }
 
-     if (registrationData.password !== registrationData.confirmPassword) {
-       throw new Error('Passwords do not match');
-     }
+    if (registrationData.password !== registrationData.confirmPassword) {
+      throw new Error('Passwords do not match');
+    }
 
-     if (passwordStrength.score < 3) {
-       throw new Error('Please choose a stronger password');
-     }
+    if (passwordStrength.score < 3) {
+      throw new Error('Please choose a stronger password');
+    }
 
-     await onComplete({
-       phone: phoneData.phoneNumber,
-       ...registrationData
-     });
-     
-     setLoading(false);
-     navigate('/app');
-   } catch (error) {
-     setError(error.message);
-     setLoading(false);
-   }
- };
+    await onComplete({
+      phone: phoneData.phoneNumber,
+      ...registrationData
+    });
+
+    // No need to setLoading(false) here as we're navigating away
+    // Phone verification users go directly to /app
+    navigate('/app');
+  } catch (error) {
+    setError(error.message);
+    setLoading(false);
+  }
+};
 
  const handleUsernameChange = (e) => {
    const username = e.target.value;

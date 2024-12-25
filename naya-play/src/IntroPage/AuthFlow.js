@@ -6,6 +6,8 @@ import { auth, db } from '../firebase';
 import { useNavigate } from 'react-router-dom';
 import PhoneVerificationSteps from './PhoneVerificationSteps';
 import { RegisterModal } from './Navbar';
+import { updateProfile } from 'firebase/auth';
+import { data } from 'react-router-dom';
 
 const AuthFlow = () => {
   const [currentModal, setCurrentModal] = useState(null);
@@ -80,11 +82,13 @@ const AuthFlow = () => {
       }
 
       // Store verification info in localStorage
-      localStorage.setItem('requiresVerification', 'true');
-      localStorage.setItem('userEmail', formData.email);
-      localStorage.setItem('userId', user.uid);
-      localStorage.setItem('registrationTime', new Date().toISOString());
-      
+      if (data.method === 'email') {
+        localStorage.setItem('requiresVerification', 'true');
+        localStorage.setItem('userEmail', formData.email);
+        navigate('/verify-email');
+      } else {
+        navigate('/app');
+      }
       // Close modal and redirect
       setCurrentModal(null);
       navigate('/verify-email');
@@ -116,14 +120,20 @@ const AuthFlow = () => {
   // Handler for phone registration
   const handlePhoneRegistrationComplete = async (data) => {
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, `${data.phone}@temp.com`, data.password);
+      // Create unique ID for phone users
+      const timestamp = Date.now();
+      const phoneEmail = `phone_${data.phone.replace(/\D/g, '')}${timestamp}@nayaplay.co`;
       
-      await setDoc(doc(db, 'users', userCredential.user.uid), {
+      const userCredential = await createUserWithEmailAndPassword(auth, phoneEmail, data.password);
+      const user = userCredential.user;
+  
+      await setDoc(doc(db, 'users', user.uid), {
         username: data.username.toLowerCase(),
         displayUsername: data.username,
         phone: data.phone,
         createdAt: new Date().toISOString(),
-        emailVerified: true,
+        emailVerified: true, // Phone users are pre-verified
+        phoneVerified: true,
         balance: 0,
         totalBets: 0,
         totalWagered: 0,
@@ -131,16 +141,17 @@ const AuthFlow = () => {
         vipLevel: 0,
         vipPoints: 0,
         lastActive: new Date().toISOString(),
-        status: 'active',
-        ageVerified: true
+        status: 'active'
       });
   
+      // Navigate directly to app for phone users
       navigate('/app');
     } catch (error) {
       console.error('Registration error:', error);
       throw new Error('Registration failed. Please try again.');
     }
   };
+  
 
   return (
     <div className="max-w-md mx-auto space-y-4">
