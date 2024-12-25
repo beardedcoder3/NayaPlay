@@ -116,14 +116,14 @@ const AuthFlow = () => {
   // Handler for phone registration
   const handlePhoneRegistrationComplete = async (data) => {
     try {
-      // Create user document for phone registration
-      const userDocRef = doc(db, 'users', data.userId);
-      await setDoc(userDocRef, {
-        phone: data.phone,
+      const userCredential = await createUserWithEmailAndPassword(auth, `${data.phone}@temp.com`, data.password);
+      
+      await setDoc(doc(db, 'users', userCredential.user.uid), {
         username: data.username.toLowerCase(),
         displayUsername: data.username,
+        phone: data.phone,
         createdAt: new Date().toISOString(),
-        emailVerified: true, // Phone verified users don't need email verification
+        emailVerified: true,
         balance: 0,
         totalBets: 0,
         totalWagered: 0,
@@ -134,13 +134,11 @@ const AuthFlow = () => {
         status: 'active',
         ageVerified: true
       });
-
-      // Close modal and redirect
-      setCurrentModal(null);
+  
       navigate('/app');
     } catch (error) {
-      console.error('Phone registration error:', error);
-      throw new Error('Registration failed. Please try again later.');
+      console.error('Registration error:', error);
+      throw new Error('Registration failed. Please try again.');
     }
   };
 

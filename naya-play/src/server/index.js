@@ -340,7 +340,6 @@ const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TO
 // Send OTP
 app.post('/api/send-phone-verification', async (req, res) => {
   const { phoneNumber } = req.body;
-  console.log('Sending verification to:', phoneNumber);
   
   try {
     const verification = await client.verify.v2
@@ -348,19 +347,13 @@ app.post('/api/send-phone-verification', async (req, res) => {
       .verifications
       .create({
         to: phoneNumber,
-        channel: 'sms'
+        channel: 'sms',
+        customMessage: 'Welcome to NayaPlay! Your verification code is {code}. This code will expire in 5 minutes.'
       });
 
-    res.json({ 
-      success: true, 
-      status: verification.status 
-    });
+    res.json({ success: true, status: verification.status });
   } catch (error) {
-    console.error('Verification error:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: error.message 
-    });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
@@ -396,23 +389,22 @@ app.post('/api/send-phone-verification', async (req, res) => {
   const { phoneNumber } = req.body;
   
   try {
+    // Format phone number to E.164 format for Twilio
+    const formattedNumber = phoneNumber.startsWith('+') ? phoneNumber : `+${phoneNumber}`;
+    
     const verification = await client.verify.v2
       .services(process.env.TWILIO_VERIFY_SERVICE_SID)
-      .verifications.create({
-        to: phoneNumber,
+      .verifications
+      .create({
+        to: formattedNumber,
         channel: 'sms'
       });
 
-    res.json({ 
-      success: true, 
-      status: verification.status 
-    });
+    console.log('Twilio verification response:', verification);
+    res.json({ success: true, status: verification.status });
   } catch (error) {
     console.error('Twilio error:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: error.message 
-    });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
