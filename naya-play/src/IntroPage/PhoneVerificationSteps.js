@@ -90,7 +90,11 @@ const PhoneVerificationSteps = ({ onBack, onComplete }) => {
   try {
     const response = await fetch(`${process.env.REACT_APP_API_URL}/api/send-phone-verification`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      credentials: 'include',
       body: JSON.stringify({ phoneNumber: phoneData.phoneNumber })
     });
 
@@ -220,9 +224,9 @@ const PhoneVerificationSteps = ({ onBack, onComplete }) => {
                  country="us"
                  value={phoneData.phoneNumber}
                  onChange={phone => setPhoneData(prev => ({
-                   ...prev,
-                   phoneNumber: phone
-                 }))}
+                  ...prev,
+                  phoneNumber: `+${phone}`  // Add + prefix
+                }))}
                  inputStyle={{
                    background: 'rgba(31, 41, 55, 0.5)',
                    border: '1px solid rgba(75, 85, 99, 1)',

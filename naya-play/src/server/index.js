@@ -340,6 +340,9 @@ const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TO
 // Send OTP
 app.post('/api/send-phone-verification', async (req, res) => {
   const { phoneNumber } = req.body;
+  if (!phoneNumber.startsWith('+')) {
+    return res.status(400).json({ success: false, error: 'Phone number must start with +' });
+  }
   
   try {
     const verification = await client.verify.v2
@@ -347,12 +350,11 @@ app.post('/api/send-phone-verification', async (req, res) => {
       .verifications
       .create({
         to: phoneNumber,
-        channel: 'sms',
-        customMessage: 'Welcome to NayaPlay! Your verification code is {code}. This code will expire in 5 minutes.'
+        channel: 'sms'
       });
-
     res.json({ success: true, status: verification.status });
   } catch (error) {
+    console.error('Error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
