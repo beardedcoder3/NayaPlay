@@ -10,7 +10,8 @@ import {
   addDoc, 
   serverTimestamp,
   onSnapshot,
-  orderBy 
+  orderBy,
+  getDoc
 } from 'firebase/firestore';
 import { 
   Users, 
@@ -21,15 +22,132 @@ import {
   ArrowUpRight,
   Search,
   CheckCircle,
-  XCircle
+  XCircle,
+  User,
+  Wallet,
+  Calendar,
+  ChevronRight,
+  Clock
 } from 'lucide-react';
-import { getDoc } from 'firebase/firestore';
+
+const MetricCard = ({ title, value, icon: Icon, trend, color = "blue" }) => {
+  const colorVariants = {
+    blue: "from-blue-500/20 to-transparent border-blue-500/20 text-blue-400",
+    green: "from-green-500/20 to-transparent border-green-500/20 text-green-400",
+    yellow: "from-yellow-500/20 to-transparent border-yellow-500/20 text-yellow-400",
+    purple: "from-purple-500/20 to-transparent border-purple-500/20 text-purple-400"
+  };
+
+  return (
+    <div className="relative group">
+      <div className="absolute inset-0 bg-gradient-to-br opacity-0 group-hover:opacity-100 
+        transition-opacity duration-300 from-blue-500/5 via-transparent to-transparent rounded-2xl" />
+      
+      <div className="relative bg-[#1a1b1e] border border-white/5 rounded-2xl p-6 
+        transition-all duration-300 hover:shadow-lg hover:shadow-black/20">
+        <div className="flex justify-between items-start">
+          <div className="space-y-2">
+            <p className="text-gray-400 text-sm font-medium">{title}</p>
+            <p className="text-2xl font-bold text-white tracking-tight">
+              {typeof value === 'number' && title.includes('Transferred') ? 
+                `$${value.toFixed(2)}` : value}
+            </p>
+          </div>
+          <div className={`w-12 h-12 rounded-xl flex items-center justify-center
+            bg-gradient-to-br from-white/5 to-transparent border border-white/5
+            ${colorVariants[color]}`}>
+            <Icon size={24} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const TransferModal = ({ agent, onClose, onTransfer }) => {
+  const [amount, setAmount] = useState('');
+  const [message, setMessage] = useState('');
+
+  const handleTransfer = () => {
+    if (!amount || isNaN(amount) || Number(amount) <= 0) {
+      setMessage('Please enter a valid amount');
+      return;
+    }
+    onTransfer(Number(amount));
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-[#1a1b1e] rounded-2xl max-w-md w-full p-6 border border-white/5">
+        <div className="flex items-center space-x-3 mb-6">
+          <div className="p-2 rounded-xl bg-blue-500/10">
+            <Wallet className="text-blue-400" size={24} />
+          </div>
+          <h3 className="text-xl font-bold text-white">Transfer Funds</h3>
+        </div>
+
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-gray-400">Agent</label>
+            <div className="flex items-center space-x-3 p-3 bg-[#101114] rounded-xl border border-white/5">
+              <User size={20} className="text-gray-400" />
+              <span className="text-white">{agent?.username}</span>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-gray-400">Amount</label>
+            <div className="relative">
+              <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                <DollarSign size={18} />
+              </div>
+              <input
+                type="number"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                className="w-full bg-[#101114] text-white pl-10 pr-4 py-3 rounded-xl border border-white/5
+                  focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Enter amount"
+              />
+            </div>
+          </div>
+
+          {message && (
+            <div className={`p-3 rounded-xl text-sm ${
+              message.includes('successful') 
+                ? 'bg-green-500/10 text-green-400' 
+                : 'bg-red-500/10 text-red-400'
+            }`}>
+              {message}
+            </div>
+          )}
+
+          <div className="flex space-x-3 pt-4">
+            <button
+              onClick={handleTransfer}
+              className="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-3 px-4 rounded-xl
+                transition-all duration-300 font-medium"
+            >
+              Transfer Funds
+            </button>
+            <button
+              onClick={onClose}
+              className="flex-1 bg-white/5 hover:bg-white/10 text-white py-3 px-4 rounded-xl
+                transition-all duration-300 font-medium"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const AgentManagement = () => {
   const [agents, setAgents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedAgent, setSelectedAgent] = useState(null);
-  const [transferAmount, setTransferAmount] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [metrics, setMetrics] = useState({
     totalAgents: 0,
@@ -38,18 +156,15 @@ const AgentManagement = () => {
     totalTransferred: 0
   });
   const [showTransferModal, setShowTransferModal] = useState(false);
-  const [transferMessage, setTransferMessage] = useState('');
 
   useEffect(() => {
     console.log('Setting up agents listener...');
   
-    // Query for agents
     const agentsQuery = query(
       collection(db, 'users'),
       where('role', '==', 'agent')
     );
   
-    // Query for all completed transfers
     const transactionsQuery = query(
       collection(db, 'agentTransactions'),
       where('type', 'in', ['user_transfer', 'admin_transfer']),
@@ -57,17 +172,13 @@ const AgentManagement = () => {
       orderBy('timestamp', 'desc')
     );
   
-    // Subscribe to agents
     const unsubscribeAgents = onSnapshot(agentsQuery, (snapshot) => {
-      console.log('Received snapshot, size:', snapshot.size);
-      
       const agentData = [];
       let activeCount = 0;
       let pendingCount = 0;
   
       snapshot.forEach((doc) => {
         const data = { id: doc.id, ...doc.data() };
-        console.log('Agent data:', data);
         agentData.push(data);
   
         if (data.verified) {
@@ -85,12 +196,8 @@ const AgentManagement = () => {
         pendingVerification: pendingCount
       }));
       setLoading(false);
-    }, (error) => {
-      console.error('Snapshot error:', error);
-      setLoading(false);
     });
   
-    // Subscribe to transactions
     const unsubscribeTransactions = onSnapshot(transactionsQuery, (snapshot) => {
       let totalTransferred = 0;
       
@@ -98,11 +205,8 @@ const AgentManagement = () => {
         const transaction = doc.data();
         if (transaction.amount) {
           totalTransferred += Number(transaction.amount);
-          console.log('Transaction amount:', transaction.amount, 'Total:', totalTransferred);
         }
       });
-  
-      console.log('Final total transferred:', totalTransferred);
       
       setMetrics(prev => ({
         ...prev,
@@ -110,14 +214,11 @@ const AgentManagement = () => {
       }));
     });
   
-    // Cleanup function
     return () => {
       if (unsubscribeAgents) unsubscribeAgents();
       if (unsubscribeTransactions) unsubscribeTransactions();
     };
   }, []);
-
-  
 
   const handleVerifyAgent = async (agentId, verify = true) => {
     try {
@@ -128,7 +229,6 @@ const AgentManagement = () => {
         lastUpdated: serverTimestamp()
       });
 
-      // Add to agent transactions for record
       await addDoc(collection(db, 'agentTransactions'), {
         agentId,
         type: verify ? 'verification_approved' : 'verification_rejected',
@@ -139,38 +239,22 @@ const AgentManagement = () => {
     }
   };
 
-  const handleTransferFunds = async () => {
-    if (!selectedAgent || !transferAmount) {
-      setTransferMessage('Please select an agent and enter amount');
-      return;
-    }
-  
-    const amount = Number(transferAmount);
-    
-    if (isNaN(amount) || amount <= 0) {
-      setTransferMessage('Please enter a valid amount');
-      return;
-    }
+  const handleTransferFunds = async (amount) => {
+    if (!selectedAgent || !amount) return;
   
     try {
-      // Get agent reference and current data
       const agentDocRef = doc(db, 'users', selectedAgent.id);
       const agentSnapshot = await getDoc(agentDocRef);
   
-      if (!agentSnapshot.exists()) {
-        setTransferMessage('Agent not found');
-        return;
-      }
+      if (!agentSnapshot.exists()) return;
   
       const currentBalance = agentSnapshot.data().balance || 0;
   
-      // Update agent's balance
       await updateDoc(agentDocRef, {
         balance: currentBalance + amount,
         lastUpdated: serverTimestamp()
       });
   
-      // Log the transfer
       await addDoc(collection(db, 'agentTransactions'), {
         agentId: selectedAgent.id,
         amount: amount,
@@ -182,13 +266,10 @@ const AgentManagement = () => {
         newBalance: currentBalance + amount
       });
   
-      setTransferMessage('Transfer successful');
-      setTransferAmount('');
       setShowTransferModal(false);
       setSelectedAgent(null);
     } catch (error) {
       console.error('Transfer error:', error);
-      setTransferMessage('Transfer failed: ' + error.message);
     }
   };
 
@@ -199,8 +280,11 @@ const AgentManagement = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <div className="text-white">Loading...</div>
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="relative">
+          <div className="w-12 h-12 rounded-full border-2 border-white/10 border-t-blue-500 animate-spin" />
+          <div className="mt-4 text-sm text-gray-400">Loading agents...</div>
+        </div>
       </div>
     );
   }
@@ -209,217 +293,183 @@ const AgentManagement = () => {
     <div className="space-y-6">
       {/* Metrics Overview */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-gray-800 p-6 rounded-lg">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-gray-400">Total Agents</h3>
-            <Users className="text-indigo-400 h-5 w-5" />
-          </div>
-          <p className="text-2xl font-semibold text-white">{metrics.totalAgents}</p>
-        </div>
-
-        <div className="bg-gray-800 p-6 rounded-lg">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-gray-400">Pending Verification</h3>
-            <ShieldAlert className="text-yellow-400 h-5 w-5" />
-          </div>
-          <p className="text-2xl font-semibold text-white">{metrics.pendingVerification}</p>
-        </div>
-
-        <div className="bg-gray-800 p-6 rounded-lg">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-gray-400">Active Agents</h3>
-            <Activity className="text-green-400 h-5 w-5" />
-          </div>
-          <p className="text-2xl font-semibold text-white">{metrics.activeAgents}</p>
-        </div>
-
-        <div className="bg-gray-800 p-6 rounded-lg">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-gray-400">Total Transferred</h3>
-            <ArrowUpRight className="text-blue-400 h-5 w-5" />
-          </div>
-          <p className="text-2xl font-semibold text-white">
-            ${metrics.totalTransferred.toFixed(2)}
-          </p>
-        </div>
+        <MetricCard
+          title="Total Agents"
+          value={metrics.totalAgents}
+          icon={Users}
+          color="blue"
+        />
+        <MetricCard
+          title="Pending Verification"
+          value={metrics.pendingVerification}
+          icon={ShieldAlert}
+          color="yellow"
+        />
+        <MetricCard
+          title="Active Agents"
+          value={metrics.activeAgents}
+          icon={Activity}
+          color="green"
+        />
+        <MetricCard
+          title="Total Transferred"
+          value={metrics.totalTransferred}
+          icon={ArrowUpRight}
+          color="purple"
+        />
       </div>
 
-      {/* Search and Actions */}
-      <div className="flex items-center justify-between">
-        <div className="relative flex-1 max-w-md">
-          <input
-            type="text"
-            placeholder="Search agents..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-gray-700 text-white rounded-lg pl-10 pr-4 py-2"
-          />
-          <Search className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
+      {/* Search and Table */}
+      <div className="bg-[#1a1b1e] rounded-2xl border border-white/5 overflow-hidden">
+        <div className="p-6 border-b border-white/5">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xl font-bold text-white">Agents List</h3>
+            <div className="relative w-64">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+              <input
+                type="text"
+                placeholder="Search agents..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-[#101114] text-white pl-10 pr-4 py-2 rounded-xl border border-white/5
+                  focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
         </div>
-      </div>
 
-      {/* Agents List */}
-      <div className="bg-gray-800 rounded-lg overflow-hidden">
-        <div className="p-6 border-b border-gray-700">
-          <h3 className="text-xl font-semibold text-white">Agents List</h3>
-        </div>
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-gray-700">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">
+            <thead>
+              <tr className="bg-[#101114] border-b border-white/5">
+                <th className="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase">
                   Agent
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">
+                <th className="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase">
                   Status
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">
+                <th className="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase">
                   Balance
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">
-                  Registration Date
+                <th className="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase">
+                  Registration
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">
+                <th className="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-700">
+            <tbody className="divide-y divide-white/5">
               {filteredAgents.map((agent) => (
-                <tr key={agent.id} className="hover:bg-gray-700/50">
+                <tr key={agent.id} className="group hover:bg-white/5 transition-colors">
                   <td className="px-6 py-4">
                     <div className="flex items-center space-x-3">
-                      <div className="flex-shrink-0 h-10 w-10 rounded-full bg-gray-700 
-                        flex items-center justify-center">
-                        <Users className="h-5 w-5 text-gray-400" />
+                      <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
+                        <User className="text-blue-400" size={20} />
                       </div>
                       <div>
-                        <p className="text-sm font-medium text-white">{agent.username}</p>
-                        <p className="text-xs text-gray-400">{agent.email}</p>
+                        <p className="text-white font-medium">{agent.username}</p>
+                        <p className="text-sm text-gray-400">{agent.email}</p>
                       </div>
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <span className={`px-2 py-1 text-xs rounded-full ${
-                      agent.verified
-                        ? 'bg-green-500/20 text-green-400'
-                        : 'bg-yellow-500/20 text-yellow-400'
-                    }`}>
-                      {agent.verified ? 'Verified' : 'Pending'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center space-x-2">
-                      <DollarSign className="h-4 w-4 text-gray-400" />
-                      <span className="text-white">{agent.balance?.toFixed(2) || '0.00'}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-400">
-                  {agent.createdAt ? 
-  (agent.createdAt.toDate ? 
-    agent.createdAt.toDate().toLocaleDateString() 
-    : new Date(agent.createdAt).toLocaleDateString()
-  ) 
-  : 'N/A'
-}
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center space-x-3">
-                      {!agent.verified ? (
-                        <>
+                    <span className={`inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-xs font-medium
+                      ${agent.verified 
+                        ? 'bg-green-500/10 text-green-400' 
+                        : 'bg-yellow-500/10 text-yellow-400'}`}
+                    >
+                      <span className={`w-1 h-1 rounded-full 
+                        ${agent.verified ? 'bg-green-400' : 'bg-yellow-400'}`} />
+                        <span>{agent.verified ? 'Verified' : 'Pending'}</span>
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center space-x-2">
+                        <DollarSign className="text-gray-400" size={16} />
+                        <span className="text-white font-medium">
+                          ${agent.balance?.toFixed(2) || '0.00'}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center space-x-2 text-gray-400">
+                        <Calendar size={16} />
+                        <span>
+                          {agent.createdAt ? 
+                            (agent.createdAt.toDate ? 
+                              agent.createdAt.toDate().toLocaleDateString() 
+                              : new Date(agent.createdAt).toLocaleDateString()
+                            ) 
+                            : 'N/A'
+                          }
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center space-x-2">
+                        {!agent.verified ? (
+                          <>
+                            <button
+                              onClick={() => handleVerifyAgent(agent.id, true)}
+                              className="p-2 hover:bg-green-500/10 rounded-xl transition-all duration-300
+                                text-green-400"
+                              title="Approve Agent"
+                            >
+                              <CheckCircle size={18} />
+                            </button>
+                            <button
+                              onClick={() => handleVerifyAgent(agent.id, false)}
+                              className="p-2 hover:bg-red-500/10 rounded-xl transition-all duration-300
+                                text-red-400"
+                              title="Reject Agent"
+                            >
+                              <XCircle size={18} />
+                            </button>
+                          </>
+                        ) : (
                           <button
-                            onClick={() => handleVerifyAgent(agent.id, true)}
-                            className="text-green-400 hover:text-green-300"
-                            title="Approve Agent"
+                            onClick={() => {
+                              setSelectedAgent(agent);
+                              setShowTransferModal(true);
+                            }}
+                            className="px-4 py-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400
+                              rounded-xl transition-all duration-300 text-sm font-medium
+                              flex items-center space-x-2"
                           >
-                            <CheckCircle className="h-5 w-5" />
+                            <Wallet size={16} />
+                            <span>Transfer</span>
                           </button>
-                          <button
-                            onClick={() => handleVerifyAgent(agent.id, false)}
-                            className="text-red-400 hover:text-red-300"
-                            title="Reject Agent"
-                          >
-                            <XCircle className="h-5 w-5" />
-                          </button>
-                        </>
-                      ) : (
-                        <button
-                          onClick={() => {
-                            setSelectedAgent(agent);
-                            setShowTransferModal(true);
-                          }}
-                          className="text-indigo-400 hover:text-indigo-300 text-sm"
-                        >
-                          Transfer Funds
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Transfer Modal */}
-      {showTransferModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center">
-          <div className="bg-gray-800 p-6 rounded-lg w-full max-w-md">
-            <h3 className="text-xl font-semibold text-white mb-4">
-              Transfer Funds to Agent
-            </h3>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-400 mb-2">
-                  Agent
-                </label>
-                <p className="text-white">{selectedAgent?.username}</p>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+  
+            {filteredAgents.length === 0 && (
+              <div className="text-center py-12">
+                <Users size={48} className="mx-auto text-gray-600 mb-4" />
+                <p className="text-gray-400">No agents found</p>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-400 mb-2">
-                  Amount
-                </label>
-                <input
-                  type="number"
-                  value={transferAmount}
-                  onChange={(e) => setTransferAmount(e.target.value)}
-                  className="w-full bg-gray-700 text-white rounded-lg px-4 py-2"
-                />
-              </div>
-              {transferMessage && (
-                <p className={`text-sm ${
-                  transferMessage.includes('successful') ? 'text-green-400' : 'text-red-400'
-                }`}>
-                  {transferMessage}
-                </p>
-              )}
-              <div className="flex justify-end space-x-3">
-                <button
-                  onClick={() => {
-                    setShowTransferModal(false);
-                    setSelectedAgent(null);
-                    setTransferAmount('');
-                    setTransferMessage('');
-                  }}
-                  className="px-4 py-2 text-gray-400 hover:text-white"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleTransferFunds}
-                  className="px-4 py-2 bg-indigo-500 text-white rounded-lg 
-                    hover:bg-indigo-600"
-                >
-                  Transfer
-                </button>
-              </div>
-            </div>
+            )}
           </div>
         </div>
-      )}
-    </div>
-  );
-};
-
-export default AgentManagement;
+  
+        {/* Transfer Modal */}
+        {showTransferModal && (
+          <TransferModal
+            agent={selectedAgent}
+            onClose={() => {
+              setShowTransferModal(false);
+              setSelectedAgent(null);
+            }}
+            onTransfer={handleTransferFunds}
+          />
+        )}
+      </div>
+    );
+  };
+  
+  export default AgentManagement;

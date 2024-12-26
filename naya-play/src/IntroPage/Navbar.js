@@ -729,15 +729,27 @@ const NavBar = () => {
         status: 'active'
       });
   
-      // Send verification email
-      await sendEmailVerification(user);
-      
-      // Store info for email verification
+      // Use your custom verification endpoint instead of Firebase's
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/generate-verification`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: formData.email,
+          userId: user.uid,
+          username: formData.username
+        })
+      });
+  
+      if (!response.ok) {
+        throw new Error('Failed to send verification email');
+      }
+  
       localStorage.setItem('requiresVerification', 'true');
       localStorage.setItem('userEmail', formData.email);
       localStorage.setItem('userId', user.uid);
       
-      // Redirect to email verification
       navigate('/verify-email');
     } catch (error) {
       if (error.code === 'auth/email-already-in-use') {

@@ -10,69 +10,86 @@ import {
   TrendingUp,
   TrendingDown,
   Clock,
-  Target
+  Target,
+  ChevronRight
 } from 'lucide-react';
 
 const StatCard = ({ title, value, change, icon: Icon, type, subtitle }) => (
-  <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-    <div className="flex justify-between items-start">
-      <div>
-        <p className="text-sm text-gray-400">{title}</p>
-        <p className="text-2xl font-bold text-white mt-1">
-          {typeof value === 'string' ? value : 
-           title.toLowerCase().includes('rate') ? `${value.toFixed(2)}%` :
-           title.toLowerCase().includes('average') ? `$${value.toFixed(2)}` :
-           value.toLocaleString('en-US', {
-             style: title.toLowerCase().includes('balance') || 
-                    title.toLowerCase().includes('volume') ? 'currency' : 'decimal',
-             currency: 'USD',
-             minimumFractionDigits: 2,
-             maximumFractionDigits: 2
-           })}
-        </p>
-        {subtitle && (
-          <p className="text-xs text-gray-400 mt-1">{subtitle}</p>
-        )}
-        {change !== undefined && (
-          <div className={`flex items-center mt-2 ${
-            change >= 0 ? 'text-green-400' : 'text-red-400'
-          }`}>
-            {change >= 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
-            <span className="text-sm font-medium ml-1">{Math.abs(change)}%</span>
-          </div>
-        )}
-      </div>
-      <div className={`p-3 rounded-lg ${
-        type === 'profit' ? 'bg-green-500/10 text-green-400' :
-        type === 'loss' ? 'bg-red-500/10 text-red-400' :
-        'bg-blue-500/10 text-blue-400'
-      }`}>
-        <Icon size={24} />
+  <div className="relative group">
+    {/* Gradient backdrop */}
+    <div className="absolute inset-0 bg-gradient-to-br opacity-0 group-hover:opacity-100 transition-opacity duration-300
+      from-blue-500/5 via-transparent to-transparent rounded-2xl" />
+    
+    <div className="relative bg-[#1a1b1e] border border-white/5 rounded-2xl p-6 
+      transition-all duration-300 hover:shadow-lg hover:shadow-black/20">
+      <div className="flex justify-between items-start">
+        <div className="space-y-2">
+          <p className="text-gray-400 text-sm font-medium">{title}</p>
+          <p className="text-2xl font-bold text-white tracking-tight">
+            {typeof value === 'string' ? value : 
+             title.toLowerCase().includes('rate') ? `${value.toFixed(2)}%` :
+             title.toLowerCase().includes('average') ? `$${value.toFixed(2)}` :
+             value.toLocaleString('en-US', {
+               style: title.toLowerCase().includes('balance') || 
+                      title.toLowerCase().includes('volume') ? 'currency' : 'decimal',
+               currency: 'USD',
+               minimumFractionDigits: 2,
+               maximumFractionDigits: 2
+             })}
+          </p>
+          {subtitle && (
+            <p className="text-sm text-gray-500">{subtitle}</p>
+          )}
+          {change !== undefined && (
+            <div className={`flex items-center space-x-1.5 ${
+              change >= 0 ? 'text-green-400' : 'text-red-400'
+            }`}>
+              {change >= 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
+              <span className="text-sm font-medium">{Math.abs(change)}%</span>
+            </div>
+          )}
+        </div>
+        <div className={`w-12 h-12 rounded-xl flex items-center justify-center
+          bg-gradient-to-br from-white/5 to-transparent border border-white/5
+          ${type === 'profit' ? 'text-green-400' :
+            type === 'loss' ? 'text-red-400' :
+            'text-blue-400'}`}>
+          <Icon size={24} />
+        </div>
       </div>
     </div>
   </div>
 );
 
 const ActivityPanel = ({ title, items, icon: Icon }) => (
-  <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-    <div className="flex items-center mb-4">
-      <Icon className="text-gray-400 mr-2" size={20} />
-      <h3 className="text-lg font-medium text-white">{title}</h3>
+  <div className="bg-[#1a1b1e] rounded-2xl border border-white/5 overflow-hidden
+    transition-all duration-300 hover:shadow-lg hover:shadow-black/20">
+    <div className="p-4 border-b border-white/5">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-3">
+          <Icon className="text-blue-400" size={20} />
+          <h3 className="text-lg font-semibold text-white">{title}</h3>
+        </div>
+        <button className="p-2 hover:bg-white/5 rounded-lg transition-colors text-gray-400 hover:text-white">
+          <ChevronRight size={20} />
+        </button>
+      </div>
     </div>
-    <div className="space-y-4">
+    
+    <div className="divide-y divide-white/5">
       {items.map((item, index) => (
-        <div key={index} className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="flex-1">
-              <p className="text-sm text-white">{item.description}</p>
-              <p className="text-xs text-gray-400">{item.time}</p>
+        <div key={index} className="p-4 hover:bg-white/5 transition-colors">
+          <div className="flex items-center justify-between">
+            <div className="space-y-1">
+              <p className="text-white text-sm font-medium">{item.description}</p>
+              <p className="text-xs text-gray-500">{item.time}</p>
             </div>
-          </div>
-          <div className="text-right">
-            <span className={`text-sm ${item.status === 'won' ? 'text-green-400' : 'text-red-400'}`}>
-              ${Math.abs(item.amount).toFixed(2)}
-            </span>
-            <p className="text-xs text-gray-400">{item.multiplier}x</p>
+            <div className="text-right">
+              <span className={`text-sm font-medium ${item.status === 'won' ? 'text-green-400' : 'text-red-400'}`}>
+                ${Math.abs(item.amount).toFixed(2)}
+              </span>
+              <p className="text-xs text-gray-500">{item.multiplier}x</p>
+            </div>
           </div>
         </div>
       ))}
@@ -100,13 +117,12 @@ const DashboardOverview = () => {
 
   useEffect(() => {
     fetchDashboardStats();
-    const interval = setInterval(fetchDashboardStats, 30000); // Refresh every 30 seconds
+    const interval = setInterval(fetchDashboardStats, 30000);
     return () => clearInterval(interval);
   }, []);
 
   const fetchDashboardStats = async () => {
     try {
-      // Get users stats
       const usersRef = collection(db, 'users');
       const usersSnap = await getDocs(usersRef);
       
@@ -125,7 +141,6 @@ const DashboardOverview = () => {
         totalBalance += parseFloat(userData.balance || 0);
       });
 
-      // Get recent bets
       const twentyFourHoursAgo = new Date();
       twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
 
@@ -142,7 +157,6 @@ const DashboardOverview = () => {
         id: doc.id
       }));
 
-      // Calculate house profit (total wagered - total wins)
       const houseProfit = totalWagered - totalBalance;
 
       setStats({
@@ -157,7 +171,7 @@ const DashboardOverview = () => {
           highestWin: recentBets.reduce((max, bet) => 
             bet.status === 'won' && bet.payout > max ? bet.payout : max, 0)
         },
-        onlineUsers: Math.floor(usersSnap.size * 0.1), // Estimate 10% online
+        onlineUsers: Math.floor(usersSnap.size * 0.1),
         recentBets,
         houseProfit
       });
@@ -170,8 +184,11 @@ const DashboardOverview = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-indigo-500" />
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="relative">
+          <div className="w-12 h-12 rounded-full border-2 border-white/10 border-t-blue-500 animate-spin" />
+          <div className="mt-4 text-sm text-gray-400">Loading dashboard data...</div>
+        </div>
       </div>
     );
   }
@@ -179,13 +196,14 @@ const DashboardOverview = () => {
   return (
     <div className="space-y-6">
       {/* Main Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           title="Total Players"
           value={stats.totalUsers}
           icon={Users}
           type="default"
           subtitle="Registered accounts"
+          change={8}
         />
         <StatCard
           title="Daily Volume"
@@ -193,6 +211,7 @@ const DashboardOverview = () => {
           icon={Activity}
           type="profit"
           subtitle="Last 24 hours"
+          change={15}
         />
         <StatCard
           title="House Profit"
@@ -200,6 +219,7 @@ const DashboardOverview = () => {
           icon={DollarSign}
           type={stats.houseProfit >= 0 ? 'profit' : 'loss'}
           subtitle="Net revenue"
+          change={stats.houseProfit >= 0 ? 12 : -12}
         />
         <StatCard
           title="Active Players"
@@ -207,17 +227,19 @@ const DashboardOverview = () => {
           icon={Target}
           type="default"
           subtitle="Currently online"
+          change={5}
         />
       </div>
 
-      {/* Mines Game Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      {/* Game Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           title="Average Bet"
           value={stats.minesStats.averageBet}
           icon={Gem}
           type="default"
           subtitle="Per game"
+          change={3}
         />
         <StatCard
           title="Win Rate"
@@ -225,6 +247,7 @@ const DashboardOverview = () => {
           icon={TrendingUp}
           type="default"
           subtitle="Win/Loss ratio"
+          change={-2}
         />
         <StatCard
           title="Highest Win"
@@ -232,6 +255,7 @@ const DashboardOverview = () => {
           icon={Target}
           type="profit"
           subtitle="Single game"
+          change={20}
         />
         <StatCard
           title="Total Games"
@@ -239,11 +263,12 @@ const DashboardOverview = () => {
           icon={Activity}
           type="default"
           subtitle="All time"
+          change={10}
         />
       </div>
 
-      {/* Recent Activity */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Activity Panels */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <ActivityPanel
           title="Recent Bets"
           items={stats.recentBets.map(bet => ({

@@ -51,6 +51,7 @@ import SupportAgentDashboard from './LiveSupportSystem/SupportAgentDashboard';
 import SupportAgentLogin from './LiveSupportSystem/SupportAgentLogin';
 import { useLocation } from 'react-router-dom';
 import VerificationRoute from './VerificationRoute';
+import DiceGame from './Games/Dice';
 
 const Layout = ({ children }) => {
   const { isExpanded } = useSidebar();
@@ -258,6 +259,19 @@ function AppContent() {
               </>
             </ProtectedRoute>
           } />
+
+
+<Route path="/dice" element={
+            <ProtectedRoute>
+              <>
+               <DiceGame />
+                <LiveBetLobby />
+              </>
+            </ProtectedRoute>
+          } />
+
+          
+
 
           <Route path="/limbo" element={
             <ProtectedRoute>

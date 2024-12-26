@@ -1,314 +1,454 @@
 import React, { useState, useEffect } from 'react';
-import { X, Crown, Star, Gift, Shield, Wallet } from 'lucide-react';
+import { X, Crown, Star, ChevronRight, Shield, Gift, Zap, Trophy } from 'lucide-react';
 import { auth, db } from '../firebase';
-import { doc, getDoc, onSnapshot, collection, query, where } from 'firebase/firestore';
+import { doc, onSnapshot, collection, getDocs, query, where, orderBy, limit } from 'firebase/firestore';
+
+// Debugging function
+const logUserData = (data) => {
+  console.log('Raw Firestore User Data:', data);
+};
 
 const VIP_LEVELS = {
   1: {
     name: "Bronze",
-    color: "#CD7F32",
     requiredWager: 0,
-    rewards: {
-      dailyBonus: "1%",
-      weeklyBonus: "100",
-      monthlyBonus: "500",
-      rakeback: "2%",
-      reloadBonus: "25%",
-      maxDeposit: "1,000",
-      maxWithdraw: "5,000",
-      withdrawalFee: "1%",
-      withdrawalTime: "24h",
-      supportPriority: "Normal"
-    }
+    bgGradient: "from-amber-900 via-amber-800 to-amber-700",
+    cardBg: "bg-gradient-to-br from-amber-900/20 via-amber-800/10 to-transparent",
+    activeBar: "from-amber-600 via-amber-500 to-amber-600",
+    accent: "text-amber-500",
+    border: "border-amber-900/50"
   },
   2: {
     name: "Silver",
-    color: "#C0C0C0",
     requiredWager: 10000,
-    rewards: {
-      dailyBonus: "2%",
-      weeklyBonus: "200",
-      monthlyBonus: "1,000",
-      rakeback: "4%",
-      reloadBonus: "35%",
-      maxDeposit: "2,000",
-      maxWithdraw: "10,000",
-      withdrawalFee: "0.5%",
-      withdrawalTime: "12h",
-      supportPriority: "Priority"
-    }
+    bgGradient: "from-slate-800 via-slate-700 to-slate-600",
+    cardBg: "bg-gradient-to-br from-slate-800/20 via-slate-700/10 to-transparent",
+    activeBar: "from-slate-400 via-slate-300 to-slate-400",
+    accent: "text-slate-400",
+    border: "border-slate-700/50"
   },
   3: {
-    name: "Geeld",
-    color: "#FFD700",
+    name: "Gold",
     requiredWager: 50000,
-    rewards: {
-      dailyBonus: "3%",
-      weeklyBonus: "500",
-      monthlyBonus: "2,500",
-      rakeback: "6%",
-      reloadBonus: "50%",
-      maxDeposit: "5,000",
-      maxWithdraw: "25,000",
-      withdrawalFee: "0.25%",
-      withdrawalTime: "6h",
-      supportPriority: "VIP"
-    }
+    bgGradient: "from-yellow-800 via-amber-700 to-yellow-600",
+    cardBg: "bg-gradient-to-br from-yellow-900/20 via-amber-800/10 to-transparent",
+    activeBar: "from-yellow-400 via-yellow-300 to-yellow-400",
+    accent: "text-yellow-500",
+    border: "border-yellow-800/50"
   },
   4: {
     name: "Platinum",
-    color: "#E5E4E2",
     requiredWager: 100000,
-    rewards: {
-      dailyBonus: "4%",
-      weeklyBonus: "1,000",
-      monthlyBonus: "5,000",
-      rakeback: "8%",
-      reloadBonus: "75%",
-      maxDeposit: "10,000",
-      maxWithdraw: "50,000",
-      withdrawalFee: "0",
-      withdrawalTime: "2h",
-      supportPriority: "Premium"
-    }
+    bgGradient: "from-cyan-900 via-cyan-800 to-cyan-700",
+    cardBg: "bg-gradient-to-br from-cyan-900/20 via-cyan-800/10 to-transparent",
+    activeBar: "from-cyan-400 via-cyan-300 to-cyan-400",
+    accent: "text-cyan-400",
+    border: "border-cyan-800/50"
   },
   5: {
     name: "Diamond",
-    color: "#B9F2FF",
     requiredWager: 250000,
-    rewards: {
-      dailyBonus: "5%",
-      weeklyBonus: "2,500",
-      monthlyBonus: "10,000",
-      rakeback: "10%",
-      reloadBonus: "100%",
-      maxDeposit: "25,000",
-      maxWithdraw: "100,000",
-      withdrawalFee: "0",
-      withdrawalTime: "1h",
-      supportPriority: "Instant"
-    }
+    bgGradient: "from-violet-900 via-purple-800 to-violet-700",
+    cardBg: "bg-gradient-to-br from-violet-900/20 via-purple-800/10 to-transparent",
+    activeBar: "from-violet-400 via-violet-300 to-violet-400",
+    accent: "text-violet-400",
+    border: "border-violet-800/50"
   }
 };
 
 const VipModal = ({ isOpen, onClose }) => {
-  const [userData, setUserData] = useState({
-    currentLevel: 1,
-    wagered: 0,
-    totalBets: 0,
-    wonAmount: 0,
-    progress: 0
-  });
-
+  const [activeTab, setActiveTab] = useState('progress');
+  const [userData, setUserData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   useEffect(() => {
-    if (!auth.currentUser || !isOpen) return;
+    if (!isOpen) {
+      setLoading(false);
+      return;
+    }
+  
+    if (!auth.currentUser) {
+      setError('Please login to view VIP status');
+      setLoading(false);
+      return;
+    }
 
-    // Get user data
-    const userRef = doc(db, 'users', auth.currentUser.uid);
-    const unsubscribeUser = onSnapshot(userRef, (doc) => {
-      if (doc.exists()) {
-        const data = doc.data();
-        // Calculate VIP level based on wagered amount
-        let currentLevel = 1;
-        let progress = 0;
+    const fetchUserData = async () => {
+      try {
+        setLoading(true);
+        const userRef = doc(db, 'users', auth.currentUser.uid);
+        
+        // Main user data subscription
+        const unsubscribeUser = onSnapshot(userRef, async (doc) => {
+          if (doc.exists()) {
+            const data = doc.data();
+            logUserData(data); // Log raw data for debugging
 
-        for (let level = 5; level >= 1; level--) {
-          if (data.wagered >= VIP_LEVELS[level].requiredWager) {
-            currentLevel = level;
-            break;
+            // Calculate VIP level
+            let currentLevel = 1;
+            for (let level = 5; level >= 1; level--) {
+              if (data.wagered >= VIP_LEVELS[level].requiredWager) {
+                currentLevel = level;
+                break;
+              }
+            }
+
+            // Calculate progress
+            let progress = 0;
+            if (currentLevel < 5) {
+              const nextLevelWager = VIP_LEVELS[currentLevel + 1].requiredWager;
+              const currentLevelWager = VIP_LEVELS[currentLevel].requiredWager;
+              progress = ((data.wagered - currentLevelWager) / (nextLevelWager - currentLevelWager)) * 100;
+            }
+
+            // Get last 30 days bets
+            const thirtyDaysAgo = new Date();
+            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+            
+            const betsRef = collection(db, 'users', auth.currentUser.uid, 'bets');
+            const recentBetsQuery = query(
+              betsRef,
+              where('createdAt', '>=', thirtyDaysAgo),
+              orderBy('createdAt', 'desc')
+            );
+            
+            const betsSnapshot = await getDocs(recentBetsQuery);
+            const recentBets = betsSnapshot.docs.map(doc => doc.data());
+
+            // Calculate statistics
+            const monthlyBetsAmount = recentBets.reduce((sum, bet) => sum + (bet.amount || 0), 0);
+            const monthlyWinsAmount = recentBets.reduce((sum, bet) => sum + (bet.payout || 0), 0);
+
+            setUserData({
+              ...data,
+              currentLevel,
+              progress: Math.min(progress, 100),
+              username: data.username || 'Player',
+              wagered: data.wagered || 0,
+              totalBets: data.totalBets || 0,
+              wonAmount: data.wonAmount || 0,
+              monthlyBetsAmount,
+              monthlyWinsAmount,
+              lastUpdated: new Date()
+            });
           }
-        }
-
-        // Calculate progress to next level
-        if (currentLevel < 5) {
-          const nextLevelWager = VIP_LEVELS[currentLevel + 1].requiredWager;
-          const currentLevelWager = VIP_LEVELS[currentLevel].requiredWager;
-          progress = ((data.wagered - currentLevelWager) / (nextLevelWager - currentLevelWager)) * 100;
-        }
-
-        setUserData({
-          currentLevel,
-          wagered: data.wagered || 0,
-          totalBets: data.totalBets || 0,
-          wonAmount: data.wonAmount || 0,
-          progress: Math.min(progress, 100)
+          setLoading(false);
         });
-      }
-    });
 
-    return () => unsubscribeUser();
+        return () => unsubscribeUser();
+      } catch (err) {
+        console.error('Error fetching user data:', err);
+        setError(err.message);
+        setLoading(false);
+      }
+    };
+
+    fetchUserData();
   }, [isOpen]);
 
-  const currentLevelData = VIP_LEVELS[userData.currentLevel];
-  const nextLevelData = VIP_LEVELS[userData.currentLevel + 1];
-
-  const LevelCard = ({ level, data, isActive }) => (
-    <div className={`bg-gray-800/50 rounded-xl border ${
-      isActive ? 'border-indigo-600' : 'border-gray-700/50'
-    } overflow-hidden transition-all duration-200`}>
-      <div className="p-6">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h3 className="text-xl font-bold text-white">{data.name}</h3>
-            <p className="text-indigo-400">Level {level}</p>
-          </div>
-          <div className={`w-10 h-10 rounded-lg flex items-center justify-center
-            ${isActive ? 'bg-indigo-600/20' : 'bg-gray-700/50'}`}>
-            <Star className={`w-5 h-5 ${isActive ? 'text-indigo-400' : 'text-gray-400'}`} />
-          </div>
-        </div>
-
-        <div className="space-y-3">
-          <div className="flex justify-between">
-            <span className="text-gray-400">Rakeback</span>
-            <span className="text-white">{data.rewards.rakeback}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-gray-400">Weekly Bonus</span>
-            <span className="text-white">${data.rewards.weeklyBonus}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-gray-400">Monthly Bonus</span>
-            <span className="text-white">${data.rewards.monthlyBonus}</span>
-          </div>
-        </div>
-
-        {!isActive && data.requiredWager > 0 && (
-          <div className="mt-4 p-3 bg-gray-700/30 rounded-lg">
-            <p className="text-sm text-gray-300">
-              Wager ${data.requiredWager.toLocaleString()} to unlock
-            </p>
-          </div>
-        )}
+  const currentLevel = userData ? VIP_LEVELS[userData.currentLevel] : VIP_LEVELS[1];
+// In your VipModal component, modify the loading state:
+if (loading) {
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 backdrop-blur-sm">
+      <div className="flex items-center gap-3">
+        <div className="w-2 h-2 rounded-full bg-blue-500 animate-bounce [animation-delay:-0.3s]"></div>
+        <div className="w-2 h-2 rounded-full bg-blue-500 animate-bounce [animation-delay:-0.15s]"></div>
+        <div className="w-2 h-2 rounded-full bg-blue-500 animate-bounce"></div>
       </div>
     </div>
+  );
+}
+
+  if (error) {
+    return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80">
+      <div className="text-red-500">Error: {error}</div>
+    </div>;
+  }
+
+  if (!userData) return null;
+
+  const TabButton = ({ name, icon: Icon, tab }) => (
+    <button
+      onClick={() => setActiveTab(tab)}
+      className={`flex items-center gap-2 px-6 py-3 rounded-lg text-sm font-medium transition-all duration-300 ${
+        activeTab === tab
+          ? `${currentLevel.cardBg} ${currentLevel.accent} border ${currentLevel.border}`
+          : 'text-gray-400 hover:bg-white/5'
+      }`}
+    >
+      <Icon className="w-4 h-4" />
+      {name}
+    </button>
   );
 
   return (
-    <div 
-      className={`fixed inset-0 z-[60] ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-      onClick={(e) => e.stopPropagation()}
-    >
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+    <div className={`fixed inset-0 z-50 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+      <div className="fixed inset-0 bg-black/90 backdrop-blur-sm" onClick={onClose} />
       
-      <div className="absolute inset-0 overflow-y-auto">
-        <div className="min-h-screen p-8">
+      <div className="fixed inset-0 overflow-y-auto">
+        <div className="min-h-screen px-4 py-8">
           <div className="max-w-6xl mx-auto">
             {/* Header */}
-            <div className="flex items-center justify-between mb-8">
-              <div className="flex items-center space-x-4">
-                <div className="w-12 h-12 bg-indigo-600/20 rounded-xl flex items-center justify-center">
-                  <Crown className="w-6 h-6 text-indigo-400" />
-                </div>
-                <div>
-                  <h1 className="text-2xl font-bold text-white mb-1">VIP Program</h1>
-                  <p className="text-gray-400">Level {userData.currentLevel} - {currentLevelData.name}</p>
-                </div>
-              </div>
-              <button 
-                onClick={onClose}
-                className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
-              >
-                <X size={20} className="text-gray-400" />
-              </button>
-            </div>
-
-            {/* Progress Card */}
-            <div className="bg-gray-800/50 rounded-xl border border-gray-700/50 p-6 mb-8">
-              <div className="grid grid-cols-3 gap-6 mb-6">
-                <div>
-                  <p className="text-gray-400 mb-1">Total Wagered</p>
-                  <p className="text-2xl font-bold text-white">
-                    ${userData.wagered.toLocaleString()}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-gray-400 mb-1">Total Bets</p>
-                  <p className="text-2xl font-bold text-white">
-                    {userData.totalBets.toLocaleString()}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-gray-400 mb-1">Won Amount</p>
-                  <p className="text-2xl font-bold text-white">
-                    ${userData.wonAmount.toLocaleString()}
-                  </p>
-                </div>
-              </div>
-
-              {userData.currentLevel < 5 && (
-                <div>
-                  <div className="flex justify-between text-sm mb-2">
-                    <span className="text-gray-400">
-                      Progress to {nextLevelData.name}
-                    </span>
-                    <span className="text-gray-300">{userData.progress.toFixed(1)}%</span>
-                  </div>
-                  <div className="h-2 bg-gray-700/50 rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-indigo-600 transition-all duration-300"
-                      style={{ width: `${userData.progress}%` }}
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Level Grid */}
-            <div className="grid grid-cols-3 gap-6 mb-8">
-              {Object.entries(VIP_LEVELS).map(([level, data]) => (
-                <LevelCard
-                  key={level}
-                  level={level}
-                  data={data}
-                  isActive={parseInt(level) === userData.currentLevel}
-                />
-              ))}
-            </div>
-
-            {/* Benefits Grid */}
-            <div className="grid grid-cols-2 gap-6">
-              <div className="bg-gray-800/50 rounded-xl border border-gray-700/50 p-6">
-                <div className="flex items-center space-x-3 mb-6">
-                  <Gift className="w-5 h-5 text-indigo-400" />
-                  <h2 className="text-xl font-bold text-white">Current Benefits</h2>
-                </div>
-                <div className="space-y-4">
-                  {Object.entries(currentLevelData.rewards).map(([key, value]) => (
-                    <div key={key} className="flex justify-between">
-                      <span className="text-gray-400">
-                        {key.replace(/([A-Z])/g, ' $1').trim()}
-                      </span>
-                      <span className="text-white">{value}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+            <div className={`rounded-t-2xl bg-gradient-to-br ${currentLevel.bgGradient} relative overflow-hidden`}>
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(0,0,0,0),_#000_70%)]" />
               
-              {userData.currentLevel < 5 && (
-                <div className="bg-gray-800/50 rounded-xl border border-gray-700/50 p-6">
-                  <div className="flex items-center space-x-3 mb-6">
-                    <Shield className="w-5 h-5 text-indigo-400" />
-                    <h2 className="text-xl font-bold text-white">Next Level Benefits</h2>
-                  </div>
-                  <div className="space-y-4">
-                    {Object.entries(nextLevelData.rewards).map(([key, value]) => (
-                      <div key={key} className="flex justify-between">
-                        <span className="text-gray-400">
-                          {key.replace(/([A-Z])/g, ' $1').trim()}
-                        </span>
-                        <span className="text-white">{value}</span>
+              <div className="relative px-8 py-12">
+                <button 
+                  onClick={onClose}
+                  className="absolute top-4 right-4 p-2 hover:bg-black/20 rounded-lg transition-colors"
+                >
+                  <X className="w-6 h-6 text-white/80" />
+                </button>
+
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-6">
+                    <div className="w-24 h-24 rounded-2xl bg-black/20 flex items-center justify-center backdrop-blur-sm border border-white/10">
+                      <Crown className="w-12 h-12 text-white" />
+                    </div>
+                    <div>
+                      <p className={`text-sm ${currentLevel.accent} mb-2`}>VIP Level {userData.currentLevel}</p>
+                      <h1 className="text-4xl font-bold text-white mb-2">
+                        {userData.username}
+                      </h1>
+                      <div className="flex items-center gap-2">
+                        <Trophy className={`w-4 h-4 ${currentLevel.accent}`} />
+                        <p className="text-white/80">{currentLevel.name} Member</p>
                       </div>
-                    ))}
+                    </div>
+                  </div>
+
+                  <div className="text-right">
+                    <p className="text-sm text-white/60 mb-1">Total Wagered</p>
+                    <p className="text-3xl font-bold text-white">
+                      ${userData.wagered.toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Navigation */}
+            <div className="bg-[#0A1218] border-b border-white/5 p-2">
+              <div className="flex gap-2">
+                <TabButton name="Progress" icon={Trophy} tab="progress" />
+                <TabButton name="Benefits" icon={Gift} tab="benefits" />
+                <TabButton name="Boost" icon={Zap} tab="boost" />
+                <TabButton name="History" icon={Shield} tab="history" />
+              </div>
+            </div>
+
+            {/* Content Area */}
+            <div className="bg-[#0A1218] rounded-b-2xl p-8">
+              {activeTab === 'progress' && (
+                <div className="space-y-8">
+                  {/* Progress Bar Section */}
+                  <div className={`${currentLevel.cardBg} rounded-xl border ${currentLevel.border} p-6`}>
+                    <div className="flex justify-between items-center mb-6">
+                      <div>
+                        <h3 className="text-white font-medium">Progress to Next Level</h3>
+                        <p className="text-white/60 text-sm">
+                          {userData.currentLevel < 5 
+                            ? `${VIP_LEVELS[userData.currentLevel + 1].name} VIP`
+                            : 'Maximum Level Reached'}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className={`text-2xl font-bold ${currentLevel.accent}`}>
+                          {userData.progress.toFixed(2)}%
+                        </p>
+                        {userData.currentLevel < 5 && (
+                          <p className="text-white/60 text-sm">
+                            ${(VIP_LEVELS[userData.currentLevel + 1].requiredWager - userData.wagered).toLocaleString()} more to go
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="relative h-3 bg-black/40 rounded-full overflow-hidden">
+                      <div 
+                        className={`absolute inset-y-0 left-0 bg-gradient-to-r ${currentLevel.activeBar} transition-all duration-300`}
+                        style={{ width: `${userData.progress}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Stats Grid */}
+                  <div className="grid grid-cols-4 gap-4">
+                    <div className={`${currentLevel.cardBg} rounded-xl border ${currentLevel.border} p-6`}>
+                      <p className="text-white/60 mb-1">Total Bets</p>
+                      <p className="text-2xl font-bold text-white">
+                        {userData.totalBets.toLocaleString()}
+                      </p>
+                    </div>
+                    <div className={`${currentLevel.cardBg} rounded-xl border ${currentLevel.border} p-6`}>
+                      <p className="text-white/60 mb-1">Total Wins</p>
+                      <p className="text-2xl font-bold text-white">
+                        ${userData.wonAmount.toLocaleString()}
+                      </p>
+                    </div>
+                    <div className={`${currentLevel.cardBg} rounded-xl border ${currentLevel.border} p-6`}>
+                      <p className="text-white/60 mb-1">30d Bet Amount</p>
+                      <p className="text-2xl font-bold text-white">
+                        ${userData.monthlyBetsAmount.toLocaleString()}
+                      </p>
+                    </div>
+                    <div className={`${currentLevel.cardBg} rounded-xl border ${currentLevel.border} p-6`}>
+                      <p className="text-white/60 mb-1">30d Win Amount</p>
+                      <p className="text-2xl font-bold text-white">
+                        ${userData.monthlyWinsAmount.toLocaleString()}
+                      </p>
+                    </div>
                   </div>
                 </div>
               )}
+
+              {activeTab === 'benefits' && (
+                <div className="space-y-6">
+                  {Object.entries(VIP_LEVELS).map(([level, data]) => {
+                    const isCurrentLevel = parseInt(level) === userData.currentLevel;
+                    const isUnlocked = parseInt(level) <= userData.currentLevel;
+            
+                    return (
+                      <div
+                        key={level}
+                        className={`${
+                          isCurrentLevel ? data.cardBg : 'bg-[#1A2432]/50'
+                        } rounded-xl border ${
+                          isCurrentLevel ? data.border : 'border-gray-800/50'
+                        } p-6 transition-all duration-300`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-4">
+                            <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                              isCurrentLevel ? `bg-gradient-to-br ${data.bgGradient}` : 'bg-gray-800'
+                            }`}>
+                              {isUnlocked ? (
+                                <Trophy className={`w-6 h-6 ${isCurrentLevel ? 'text-white' : data.accent}`} />
+                              ) : (
+                                <Star className="w-6 h-6 text-gray-500" />
+                              )}
+                            </div>
+                            <div>
+                              <p className={`font-medium ${isCurrentLevel ? 'text-white' : 'text-gray-300'}`}>
+                                {data.name}
+                              </p>
+                              <p className={isCurrentLevel ? data.accent : 'text-gray-500'}>
+                                Level {level}
+                              </p>
+                            </div>
+                          </div>
+                    
+                          <div className="flex items-center gap-8">
+                            <div>
+                              <p className="text-gray-400 text-sm">Rakeback</p>
+                              <p className={`text-lg font-medium ${isUnlocked ? 'text-white' : 'text-gray-600'}`}>
+                                {level * 2}%
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-gray-400 text-sm">Weekly Bonus</p>
+                              <p className={`text-lg font-medium ${isUnlocked ? 'text-white' : 'text-gray-600'}`}>
+                                ${(100 * Math.pow(2, parseInt(level) - 1)).toLocaleString()}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-gray-400 text-sm">Monthly Bonus</p>
+                              <p className={`text-lg font-medium ${isUnlocked ? 'text-white' : 'text-gray-600'}`}>
+                                ${(500 * Math.pow(2, parseInt(level) - 1)).toLocaleString()}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                    
+                        {!isUnlocked && (
+                          <div className="mt-4 pt-4 border-t border-gray-800">
+                            <p className="text-sm text-gray-400">
+                              Wager ${data.requiredWager.toLocaleString()} to unlock
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  </div>
+                )}
+  
+                {activeTab === 'boost' && (
+                  <div className="space-y-6">
+                    <div className={`${currentLevel.cardBg} rounded-xl border ${currentLevel.border} p-6`}>
+                      <h3 className="text-lg font-medium text-white mb-4">Available Boosts</h3>
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between p-4 bg-black/20 rounded-lg">
+                          <div className="flex items-center gap-4">
+                            <div className={`p-3 rounded-lg bg-gradient-to-br ${currentLevel.bgGradient}`}>
+                              <Zap className="w-6 h-6 text-white" />
+                            </div>
+                            <div>
+                              <p className="text-white font-medium">Weekly Bonus</p>
+                              <p className="text-sm text-gray-400">Refreshes every Monday</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className={`text-xl font-bold ${currentLevel.accent}`}>
+                              ${(100 * Math.pow(2, userData.currentLevel - 1)).toLocaleString()}
+                            </p>
+                            <button className="mt-2 px-4 py-1.5 rounded-lg text-sm font-medium bg-white/5 hover:bg-white/10 text-white transition-colors">
+                              Claim Now
+                            </button>
+                          </div>
+                        </div>
+  
+                        <div className="flex items-center justify-between p-4 bg-black/20 rounded-lg">
+                          <div className="flex items-center gap-4">
+                            <div className={`p-3 rounded-lg bg-gradient-to-br ${currentLevel.bgGradient}`}>
+                              <Gift className="w-6 h-6 text-white" />
+                            </div>
+                            <div>
+                              <p className="text-white font-medium">Monthly Bonus</p>
+                              <p className="text-sm text-gray-400">Refreshes on the 1st</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className={`text-xl font-bold ${currentLevel.accent}`}>
+                              ${(500 * Math.pow(2, userData.currentLevel - 1)).toLocaleString()}
+                            </p>
+                            <button className="mt-2 px-4 py-1.5 rounded-lg text-sm font-medium bg-white/5 hover:bg-white/10 text-white transition-colors">
+                              Available in 3 days
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+  
+                {activeTab === 'history' && (
+                  <div className="space-y-6">
+                    <div className={`${currentLevel.cardBg} rounded-xl border ${currentLevel.border} p-6`}>
+                      <h3 className="text-lg font-medium text-white mb-4">Bonus History</h3>
+                      <div className="space-y-3">
+                        {[...Array(5)].map((_, i) => (
+                          <div key={i} className="flex items-center justify-between p-4 bg-black/20 rounded-lg">
+                            <div>
+                              <p className="text-white font-medium">Weekly Bonus Claimed</p>
+                              <p className="text-sm text-gray-400">{new Date(Date.now() - i * 7 * 24 * 60 * 60 * 1000).toLocaleDateString()}</p>
+                            </div>
+                            <p className={`text-lg font-medium ${currentLevel.accent}`}>
+                              +${(100 * Math.pow(2, userData.currentLevel - 1)).toLocaleString()}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
-  );
-};
-
-export default VipModal;
+    );
+  };
+  
+  export default VipModal;

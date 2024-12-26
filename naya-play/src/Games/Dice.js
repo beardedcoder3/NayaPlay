@@ -1,111 +1,125 @@
-import React, { useState, useEffect } from 'react';
-import { DollarSign, Target } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { DollarSign } from 'lucide-react';
 import { useBalance } from '../IntroPage/BalanceContext';
 import { useLiveBets } from '../IntroPage/LiveBetsContext';
 import { auth, db } from '../firebase';
 import { doc, addDoc, collection, updateDoc, increment, serverTimestamp } from 'firebase/firestore';
 
-// Cryptographically secure random number generation
 const generateRandom = () => {
   const array = new Uint32Array(1);
   crypto.getRandomValues(array);
-  return array[0] / (0xffffffff + 1);
+  return (array[0] / (0xffffffff + 1)) * 100; // Returns 0-100
 };
 
-const generateGameMultiplier = () => {
-  const r = generateRandom();
-  
-  // Distribution for multipliers
-  if (r >= 0.999) {
-    // 0.1% chance for 100x-1000x
-    return 100 + Math.floor(generateRandom() * 900);
-  } else if (r >= 0.99) {
-    // 0.9% chance for 10x-100x
-    return 10 + Math.floor(generateRandom() * 90);
-  } else if (r >= 0.95) {
-    // 4% chance for 5x-10x
-    return 5 + Math.floor(generateRandom() * 5);
-  } else if (r >= 0.85) {
-    // 10% chance for 2x-5x
-    return 2 + (generateRandom() * 3);
-  } else {
-    // 85% chance for 1x-2x
-    return 1 + (generateRandom());
+const calculateWinChance = (targetNumber, isOver) => {
+  if (isOver) {
+    return (100 - targetNumber).toFixed(4);
   }
+  return targetNumber.toFixed(4);
 };
 
-const calculateWinChance = (targetMultiplier) => {
-  if (!targetMultiplier || targetMultiplier <= 1) return 0;
-  const chance = (1 / targetMultiplier) * 0.97 * 100;
-  return chance.toFixed(8);
+const calculateMultiplier = (winChance) => {
+  return (99 / winChance).toFixed(4);
+};
+
+const ResultPill = ({ number, isWin }) => {
+  return (
+    <div className={`px-4 py-1 rounded-full text-sm font-medium
+      ${isWin ? 'bg-green-500' : 'bg-gray-600'} text-white`}>
+      {Number(number).toFixed(2)}
+    </div>
+  );
 };
 
 const AnimatedNumber = ({ value, duration = 1000 }) => {
-  const [displayValue, setDisplayValue] = useState(1);
-
+  const [displayValue, setDisplayValue] = useState(50);
+  
   useEffect(() => {
     let startTime;
     let animationFrame;
-
+    
     const animate = (currentTime) => {
       if (!startTime) startTime = currentTime;
       const progress = Math.min(1, (currentTime - startTime) / duration);
-
+      
       if (progress < 1) {
-        setDisplayValue(1 + (value - 1) * progress);
+        setDisplayValue(50 + (value - 50) * progress);
         animationFrame = requestAnimationFrame(animate);
       } else {
         setDisplayValue(value);
       }
     };
-
+    
     animationFrame = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(animationFrame);
   }, [value, duration]);
-
+  
   return displayValue.toFixed(2);
 };
 
-const ResultPill = ({ multiplier, isWin }) => {
-  return (
-    <div className={`px-4 py-1 rounded-full text-sm font-medium
-      ${isWin ? 'bg-green-500' : 'bg-gray-600'} text-white`}>
-      {Number(multiplier).toFixed(2)}x
-    </div>
-  );
-};
-
-const MultiplierGame = () => {
+const DiceGame = () => {
   const { balance, updateBalance } = useBalance();
   const { addBet } = useLiveBets();
   const [betAmount, setBetAmount] = useState('');
-  const [targetMultiplier, setTargetMultiplier] = useState('');
-  const [currentMultiplier, setCurrentMultiplier] = useState(1);
+  const [targetNumber, setTargetNumber] = useState(50.50);
+  const [isOver, setIsOver] = useState(true);
+  const [currentNumber, setCurrentNumber] = useState(50);
   const [gameState, setGameState] = useState('idle');
   const [recentResults, setRecentResults] = useState([]);
+  const [isDragging, setIsDragging] = useState(false);
+  const sliderRef = useRef(null);
 
-  const calculateExpectedProfit = () => {
-    const bet = parseFloat(betAmount) || 0;
-    const target = parseFloat(targetMultiplier) || 0;
-    return (bet * target).toFixed(2);
+  const handleMouseDown = (e) => {
+    setIsDragging(true);
+    updateSliderPosition(e);
   };
+
+  const handleMouseMove = (e) => {
+    if (isDragging && gameState !== 'playing') {
+      updateSliderPosition(e);
+    }
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  useEffect(() => {
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging]);
+
+  const updateSliderPosition = (e) => {
+    if (!sliderRef.current) return;
+    const rect = sliderRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const width = rect.width;
+    const percentage = Math.min(Math.max((x / width) * 100, 2), 98);
+    setTargetNumber(percentage);
+  };
+
+  const winChance = calculateWinChance(targetNumber, isOver);
+  const multiplier = calculateMultiplier(winChance);
 
   const validateInputs = () => {
     const bet = parseFloat(betAmount);
-    const target = parseFloat(targetMultiplier);
-    return bet >= 0.10 && bet <= balance && target > 1;
+    return bet >= 0.10 && bet <= balance;
   };
 
-  const processGameResult = async (isWin, finalMultiplier) => {
+  const processGameResult = async (isWin, rollNumber) => {
     const bet = parseFloat(betAmount);
-    const winAmount = isWin ? bet * parseFloat(targetMultiplier) : 0;
+    const winAmount = isWin ? bet * multiplier : 0;
     
     try {
       await addDoc(collection(db, 'liveBets'), {
-        game: "Multiplier",
+        game: "Dice",
         user: auth.currentUser.email?.split('@')[0] || 'Anonymous',
         betAmount: bet,
-        multiplier: finalMultiplier,
+        number: rollNumber,
         payout: isWin ? winAmount : -bet,
         time: "Just now",
         timestamp: serverTimestamp(),
@@ -113,9 +127,9 @@ const MultiplierGame = () => {
       });
 
       await addDoc(collection(db, `users/${auth.currentUser.uid}/bets`), {
-        game: "Multiplier",
+        game: "Dice",
         betAmount: bet,
-        multiplier: finalMultiplier,
+        number: rollNumber,
         payout: isWin ? winAmount : -bet,
         date: new Date().toISOString(),
         status: isWin ? 'won' : 'lost'
@@ -140,24 +154,30 @@ const MultiplierGame = () => {
     if (!validateInputs() || gameState === 'playing') return;
 
     const bet = parseFloat(betAmount);
-    const target = parseFloat(targetMultiplier);
     updateBalance(-bet);
     setGameState('playing');
     
-    const finalMultiplier = generateGameMultiplier();
-    const isWin = finalMultiplier >= target && generateRandom() <= 0.97; // House edge
+    const rollNumber = generateRandom();
+    const isWin = isOver ? rollNumber > targetNumber : rollNumber < targetNumber;
     
-    setCurrentMultiplier(finalMultiplier);
+    setCurrentNumber(rollNumber);
     
     setRecentResults(prev => [{
-      multiplier: finalMultiplier,
+      number: rollNumber,
       isWin
     }, ...prev].slice(0, 5));
 
     setTimeout(async () => {
-      await processGameResult(isWin, finalMultiplier);
+      await processGameResult(isWin, rollNumber);
       setGameState(isWin ? 'won' : 'lost');
     }, 1000);
+  };
+
+  const quickSetBet = (multiplier) => {
+    const newAmount = parseFloat(betAmount || 0) * multiplier;
+    if (newAmount <= balance) {
+      setBetAmount(newAmount.toFixed(2));
+    }
   };
 
   return (
@@ -166,10 +186,10 @@ const MultiplierGame = () => {
         <div className="mb-8">
           <h1 className="text-3xl font-bold bg-gradient-to-r from-white to-gray-400 
             bg-clip-text text-transparent">
-            Multiplier
+            Dice
           </h1>
           <p className="text-gray-400">
-            Predict the multiplier to win
+            Roll over or under the target number
           </p>
         </div>
 
@@ -202,37 +222,35 @@ const MultiplierGame = () => {
                       disabled={gameState === 'playing'}
                     />
                   </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Target Multiplier (min. 1.00x)
-                  </label>
-                  <div className="relative">
-                    <Target size={20} className="absolute left-3 top-3.5 text-gray-400" />
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="1"
-                      value={targetMultiplier}
-                      onChange={(e) => setTargetMultiplier(e.target.value)}
-                      className="w-full bg-gray-800 text-white pl-10 pr-4 py-3 rounded-lg
-                        border border-gray-700 focus:border-indigo-500 focus:ring-1"
-                      disabled={gameState === 'playing'}
-                    />
+                  <div className="grid grid-cols-3 gap-2 mt-2">
+                    <button 
+                      onClick={() => quickSetBet(0.5)}
+                      className="bg-gray-700 text-white px-2 py-1 rounded text-sm hover:bg-gray-600"
+                    >
+                      ½×
+                    </button>
+                    <button 
+                      onClick={() => quickSetBet(2)}
+                      className="bg-gray-700 text-white px-2 py-1 rounded text-sm hover:bg-gray-600"
+                    >
+                      2×
+                    </button>
+                    <button 
+                      onClick={() => setBetAmount(balance.toFixed(2))}
+                      className="bg-gray-700 text-white px-2 py-1 rounded text-sm hover:bg-gray-600"
+                    >
+                      Max
+                    </button>
                   </div>
                 </div>
 
-                {betAmount && targetMultiplier && (
-                  <div className="bg-gray-800 rounded-lg p-4">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-400">Expected Profit</span>
-                      <span className="text-lg font-medium text-gray-200">
-                        ${calculateExpectedProfit()}
-                      </span>
-                    </div>
-                  </div>
-                )}
+                <button
+                  onClick={() => setIsOver(!isOver)}
+                  className="w-full bg-gray-700 text-white px-6 py-3 rounded-lg font-medium
+                    hover:bg-gray-600 transition-colors"
+                >
+                  Roll {isOver ? "Over" : "Under"}
+                </button>
 
                 <button
                   onClick={handlePlay}
@@ -255,21 +273,21 @@ const MultiplierGame = () => {
                 {recentResults.map((result, index) => (
                   <ResultPill 
                     key={index}
-                    multiplier={result.multiplier}
+                    number={result.number}
                     isWin={result.isWin}
                   />
                 ))}
               </div>
 
               <div className="flex flex-col items-center justify-center h-full">
-                <div className="text-center">
+                <div className="text-center w-full">
                   <div className="text-6xl font-bold mb-4">
                     <span className={
                       gameState === 'won' ? 'text-green-400' : 
                       gameState === 'lost' ? 'text-red-400' : 
                       'text-white'
                     }>
-                      <AnimatedNumber value={currentMultiplier} />x
+                      <AnimatedNumber value={currentNumber} />
                     </span>
                   </div>
 
@@ -282,28 +300,48 @@ const MultiplierGame = () => {
                       <div className="flex items-center justify-center">
                         <span className="text-lg font-medium text-white">
                           {gameState === 'won' 
-                            ? `You won $${(parseFloat(betAmount) * parseFloat(targetMultiplier)).toFixed(2)}!` 
-                            : 'Too high! Try again.'}
+                            ? `You won $${(parseFloat(betAmount) * multiplier).toFixed(2)}!` 
+                            : `Too ${isOver ? 'low' : 'high'}! Try again.`}
                         </span>
                       </div>
                     </div>
                   )}
 
-                  <div className="mt-4 bg-gray-800/50 rounded-lg p-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <label className="text-sm text-gray-400">Target Multiplier</label>
-                        <div className="bg-gray-900/50 rounded p-2 flex justify-between items-center">
-                          <span className="text-white">{targetMultiplier || '0.00'}</span>
-                          <span className="text-gray-500">X</span>
-                        </div>
+                  <div className="mt-8 w-full px-4">
+                    <div 
+                      ref={sliderRef}
+                      className="relative w-full h-12 bg-gray-700 rounded-full cursor-pointer"
+                      onMouseDown={handleMouseDown}
+                    >
+                      <div 
+                        className={`absolute top-0 bottom-0 left-0 rounded-full ${
+                          isOver ? 'bg-red-500/50' : 'bg-green-500/50'
+                        }`}
+                        style={{ 
+                          width: `${isOver ? targetNumber : 100-targetNumber}%`,
+                          right: isOver ? 0 : 'auto',
+                          left: isOver ? 0 : 'auto'
+                        }}
+                      />
+                      <div 
+                        className="absolute top-0 bottom-0 w-3 bg-blue-500 rounded transform -translate-x-1/2"
+                        style={{ left: `${targetNumber}%` }}
+                      />
+                      <div className="absolute top-0 w-full flex justify-between px-4 -mt-6 text-gray-400 text-sm">
+                        <span>0</span>
+                        <span>25</span>
+                        <span>50</span>
+                        <span>75</span>
+                        <span>100</span>
                       </div>
-                      <div className="space-y-2">
-                        <label className="text-sm text-gray-400">Win Chance</label>
-                        <div className="bg-gray-900/50 rounded p-2 flex justify-between items-center">
-                          <span className="text-white">{calculateWinChance(targetMultiplier)}</span>
-                          <span className="text-gray-500">%</span>
-                        </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-8 grid grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-sm text-gray-400">Target Number</label>
+                      <div className="bg-gray-900/50 rounded p-2 flex justify-between items-center">
+                        <span className="text-white">{winChance}%</span>
                       </div>
                     </div>
                   </div>
@@ -329,4 +367,4 @@ const MultiplierGame = () => {
   );
 };
 
-export default MultiplierGame;
+export default DiceGame;

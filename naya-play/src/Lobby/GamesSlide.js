@@ -19,7 +19,8 @@ const GameCard = ({ game, isCenter }) => {
       "Cyberpunk 2077": '/mines',
       "God of War Ragnarök": '/limbo',
       "Elden Ring": '/crash',
-      "Spider-Man 2": '/wheel'
+      "Spider-Man 2": '/wheel',
+       "Final Fantasy XVI": '/dice'
     };
     
     if (routes[game.title]) {

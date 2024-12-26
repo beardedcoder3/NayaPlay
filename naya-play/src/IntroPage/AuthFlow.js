@@ -8,6 +8,7 @@ import PhoneVerificationSteps from './PhoneVerificationSteps';
 import { RegisterModal } from './Navbar';
 import { updateProfile } from 'firebase/auth';
 import { data } from 'react-router-dom';
+import { serverTimestamp } from 'firebase/firestore';
 
 const AuthFlow = () => {
   const [currentModal, setCurrentModal] = useState(null);
@@ -16,53 +17,27 @@ const AuthFlow = () => {
   // Handler for email registration - same as Navbar.js
   const handleRegisterSubmit = async (formData) => {
     try {
-      const birthDate = new Date(formData.dateOfBirth);
-      const today = new Date();
-      let age = today.getFullYear() - birthDate.getFullYear();
-      const monthDiff = today.getMonth() - birthDate.getMonth();
-      
-      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-        age--;
-      }
-
-      if (age < 18) {
-        throw new Error('You must be 18 or older to register.');
-      }
-
-      // Check username availability one last time
-      const usersRef = collection(db, 'users');
-      const q = query(usersRef, where('username', '==', formData.username.toLowerCase()));
-      const querySnapshot = await getDocs(q);
-      
-      if (!querySnapshot.empty) {
-        throw new Error('Username is already taken. Please choose a different username.');
-      }
-      
-      // Create auth user
+      // First create the user in Firebase Auth
       const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
       const user = userCredential.user;
-      
-      // Store user data
-      await setDoc(doc(db, 'users', user.uid), {
+  
+      // Then update Firestore with their data
+      const userDoc = {
         email: formData.email,
         username: formData.username.toLowerCase(),
         displayUsername: formData.username,
         dateOfBirth: formData.dateOfBirth,
-        phone: formData.phone || '',
-        createdAt: new Date().toISOString(),
+        createdAt: serverTimestamp(),
         emailVerified: false,
         balance: 0,
-        totalBets: 0,
-        totalWagered: 0,
-        totalWon: 0,
-        vipLevel: 0,
-        vipPoints: 0,
-        lastActive: new Date().toISOString(),
-        status: 'active',
-        ageVerified: true
-      });
-
-      // Send verification email
+        lastActive: serverTimestamp(),
+        status: 'active'
+      };
+  
+      // Use set with merge option to avoid permission issues
+      await setDoc(doc(db, 'users', user.uid), userDoc, { merge: true });
+  
+      // Send verification email through your backend
       const response = await fetch(`${process.env.REACT_APP_API_URL}/api/generate-verification`, {
         method: 'POST',
         headers: {
@@ -72,50 +47,29 @@ const AuthFlow = () => {
           email: formData.email,
           userId: user.uid,
           username: formData.username
-        }),
-        mode: 'cors',
-        credentials: 'include'
+        })
       });
-
+  
       if (!response.ok) {
-        throw new Error('Failed to send verification email. Please try again.');
+        throw new Error('Failed to send verification email');
       }
-
-      // Store verification info in localStorage
-      if (data.method === 'email') {
-        localStorage.setItem('requiresVerification', 'true');
-        localStorage.setItem('userEmail', formData.email);
-        navigate('/verify-email');
-      } else {
-        navigate('/app');
-      }
-      // Close modal and redirect
-      setCurrentModal(null);
-      navigate('/verify-email');
-      
+  
+      // Set verification flags
+      localStorage.setItem('requiresVerification', 'true');
+      localStorage.setItem('userEmail', formData.email);
+      localStorage.setItem('userId', user.uid);
+  
+      // Navigate to verification page
+      return navigate('/verify-email');
     } catch (error) {
       console.error('Registration error:', error);
-      
-      // Handle specific error cases
       if (error.code === 'auth/email-already-in-use') {
-        throw new Error('This email is already registered. Please try logging in instead.');
-      } else if (error.code === 'auth/invalid-email') {
-        throw new Error('Please enter a valid email address.');
-      } else if (error.code === 'auth/weak-password') {
-        throw new Error('Password is too weak. Please choose a stronger password.');
-      } else if (error.code === 'auth/network-request-failed') {
-        throw new Error('Network error. Please check your connection and try again.');
+        throw new Error('Email already registered. Please login instead.');
       }
-      
-      // If it's our custom error, throw it as is
-      if (error.message.includes('Username') || error.message.includes('age')) {
-        throw error;
-      }
-      
-      // For any other errors
-      throw new Error('Registration failed. Please try again later.');
+      throw new Error('Registration failed. Please try again.');
     }
   };
+
 
   // Handler for phone registration
   const handlePhoneRegistrationComplete = async (data) => {
@@ -151,7 +105,7 @@ const AuthFlow = () => {
       throw new Error('Registration failed. Please try again.');
     }
   };
-  
+
 
   return (
     <div className="max-w-md mx-auto space-y-4">

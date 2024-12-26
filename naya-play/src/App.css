@@ -2,43 +2,105 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Modern Typography System */
+:root {
+  --primary-font: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  --heading-font: 'Outfit', system-ui, -apple-system, sans-serif;
+  --content-width: min(90%, 1200px);
+}
+
 body {
-  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  font-family: var(--primary-font);
+  line-height: 1.6;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #fafafa;
+  color: #1a1a1a;
 }
 
 h1, h2, h3, h4, h5, h6 {
-  font-family: 'Outfit', system-ui, -apple-system, sans-serif;
+  font-family: var(--heading-font);
+  line-height: 1.2;
+  font-weight: 600;
+  margin-bottom: 1rem;
 }
 
+/* Modern Container */
+.container {
+  width: var(--content-width);
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+/* Enhanced Animations */
 @keyframes shine {
-  from {
-    transform: translateX(-100%);
+  0% {
+    background-position: -200% center;
   }
-  to {
-    transform: translateX(100%);
+  100% {
+    background-position: 200% center;
   }
 }
 
 @keyframes shimmer {
+  0% {
+    transform: translateX(-100%) skewX(-15deg);
+    opacity: 0;
+  }
+  50% {
+    opacity: 0.8;
+  }
+  100% {
+    transform: translateX(200%) skewX(-15deg);
+    opacity: 0;
+  }
+}
+
+@keyframes fadeIn {
   from {
-    transform: translateX(-100%) skewX(-12deg);
+    opacity: 0;
+    transform: translateY(10px);
   }
   to {
-    transform: translateX(200%) skewX(-12deg);
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
+/* Animation Utilities */
 .animate-shine {
-  animation: shine 2s infinite;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.2),
+    transparent
+  );
+  background-size: 200% 100%;
+  animation: shine 2s infinite linear;
 }
 
+.animate-fade-in {
+  animation: fadeIn 0.5s ease-out forwards;
+}
+
+/* Modern App Styles */
 .App {
   text-align: center;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
 .App-logo {
   height: 40vmin;
   pointer-events: none;
+  filter: drop-shadow(0 0 0.75rem rgba(0, 0, 0, 0.1));
+  transition: filter 0.3s ease;
+}
+
+.App-logo:hover {
+  filter: drop-shadow(0 0 1rem rgba(0, 0, 0, 0.2));
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -48,18 +110,43 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .App-header {
-  background-color: #282c34;
+  background: linear-gradient(135deg, #1a1a1a 0%, #2d3748 100%);
   min-height: 100vh;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  font-size: calc(10px + 2vmin);
+  font-size: clamp(1rem, 2vw + 0.5rem, 1.5rem);
   color: white;
+  position: relative;
+  overflow: hidden;
 }
 
 .App-link {
-  color: #61dafb;
+  color: #63b3ed;
+  text-decoration: none;
+  transition: color 0.2s ease;
+  position: relative;
+}
+
+.App-link:hover {
+  color: #90cdf4;
+}
+
+.App-link::after {
+  content: '';
+  position: absolute;
+  width: 100%;
+  height: 2px;
+  bottom: -2px;
+  left: 0;
+  background-color: currentColor;
+  transform: scaleX(0);
+  transition: transform 0.3s ease;
+}
+
+.App-link:hover::after {
+  transform: scaleX(1);
 }
 
 @keyframes App-logo-spin {
@@ -71,32 +158,84 @@ h1, h2, h3, h4, h5, h6 {
   }
 }
 
-
-/* For smoother animations */
-* {
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+/* Modern Scrollbar Styles */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
 }
 
-/* Optimize scrolling performance */
-@media (prefers-reduced-motion: no-preference) {
-  .smooth-scroll {
-    scroll-behavior: smooth;
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #666;
+}
+
+/* Utility Classes */
+.glass-effect {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+}
+
+.text-balance {
+  text-wrap: balance;
+}
+
+.smooth-shadow {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
+              0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  transition: box-shadow 0.3s ease;
+}
+
+.smooth-shadow:hover {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1),
+              0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+/* Responsive Design Helpers */
+@media (max-width: 768px) {
+  .hide-on-mobile {
+    display: none;
+  }
+  
+  .App-header {
+    padding: 1rem;
   }
 }
 
-/* Hide scrollbar for specific elements while maintaining functionality */
+/* Performance Optimizations */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
+
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
 
-/* Optional: Add a custom class for elements that should show scrollbar on hover only */
+/* Enhanced Scroll Behavior */
 .scroll-hover {
   overflow: auto;
+  transition: scrollbar-color 0.3s ease;
 }
 
 .scroll-hover::-webkit-scrollbar-thumb {
@@ -105,4 +244,15 @@ h1, h2, h3, h4, h5, h6 {
 
 .scroll-hover:hover::-webkit-scrollbar-thumb {
   visibility: visible;
+}
+
+/* Print Optimizations */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  
+  body {
+    print-color-adjust: exact;
+  }
 }
