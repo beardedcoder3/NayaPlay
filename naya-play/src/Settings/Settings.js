@@ -14,6 +14,7 @@ import {
 } from 'firebase/auth';
 import { doc, getDoc, updateDoc, query, collection, where, getDocs } from 'firebase/firestore';
 import { auth, db } from '../firebase';
+import { runTransaction, increment, serverTimestamp } from 'firebase/firestore';
 // Base Input Component - Styled to match LiveBetLobby
 const InputField = ({ 
   label, 
@@ -52,10 +53,42 @@ const InputField = ({
           ${error ? 'border-red-500/50 focus:border-red-500 focus:ring-red-500/20' : ''}`}
       />
       {error && (
-        <p className="text-sm text-red-400 mt-1">{error}</p>
+        <p className="absolute top-full mt-1 text-sm text-red-400">{error}</p>
       )}
     </div>
   </div>
+);
+
+// Move this to the top level, near your other component definitions (before GeneralSettings)
+const BonusModal = ({ isOpen, onClose, title, message, type }) => (
+  <Modal isOpen={isOpen} onClose={onClose}>
+    <div className="p-6 space-y-6">
+      <div className="flex items-center justify-center mb-4">
+        {type === 'success' ? (
+          <div className="w-12 h-12 rounded-full bg-green-500/10 flex items-center justify-center">
+            <Check className="w-6 h-6 text-green-500" />
+          </div>
+        ) : (
+          <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center">
+            <AlertCircle className="w-6 h-6 text-red-500" />
+          </div>
+        )}
+      </div>
+      <h3 className="text-xl font-semibold text-center text-white">
+        {title}
+      </h3>
+      <p className="text-center text-gray-400">
+        {message}
+      </p>
+      <Button
+        onClick={onClose}
+        variant={type === 'success' ? 'primary' : 'danger'}
+        className="w-full"
+      >
+        Close
+      </Button>
+    </div>
+  </Modal>
 );
 
 //Button component matching LiveBetLobby
@@ -225,6 +258,10 @@ export const GeneralSettings = () => {
     };
     fetchUserData();
   }, [user]);
+
+
+ 
+
 
   const handlePhoneUpdate = async () => {
     try {
@@ -467,74 +504,260 @@ export const IgnoredUsersSettings = () => {
   );
 };
 
+
 export const OffersSettings = () => {
   const [welcomeCode, setWelcomeCode] = useState('');
   const [bonusCode, setBonusCode] = useState('');
   const [loading, setLoading] = useState(false);
   const { user } = useAuth();
+  const [bonusError, setBonusError] = useState('');
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [modalConfig, setModalConfig] = useState({
+    show: false,
+    title: '',
+    message: '',
+    type: 'success'
+  });
 
   const handleRedeemCode = async (code, type) => {
+    if (!code) return;
+    
     setLoading(true);
+    setBonusError('');
+ 
     try {
-      // Add your bonus code redemption logic here
-      console.log('Redeeming', type, 'code:', code);
+      const userRef = doc(db, 'users', user.uid);
+      const userDoc = await getDoc(userRef);
+      
+      if (!userDoc.exists()) {
+        setBonusError('User profile not found');
+        return;
+      }
+
+      if (type === 'welcome') {
+        // Check if user has already redeemed welcome bonus
+        if (userDoc.data().hasRedeemedWelcome) {
+          setBonusError('You have already redeemed your welcome bonus');
+          setModalConfig({
+            show: true,
+            title: 'Error',
+            message: 'You have already redeemed your welcome bonus',
+            type: 'error'
+          });
+          return;
+        }
+
+        // Get current welcome bonus settings
+        const welcomeBonusDoc = await getDoc(doc(db, 'welcomeBonus', 'current'));
+        if (!welcomeBonusDoc.exists() || !welcomeBonusDoc.data().isActive) {
+          setBonusError('Welcome bonus is not available');
+          return;
+        }
+
+        const welcomeBonus = welcomeBonusDoc.data();
+        if (code !== welcomeBonus.code) {
+          setBonusError('Invalid welcome code');
+          return;
+        }
+
+        // Process welcome bonus
+        await runTransaction(db, async (transaction) => {
+          const currentBalance = userDoc.data().balance || 0;
+          transaction.update(userRef, {
+            balance: currentBalance + welcomeBonus.perUserAmount,
+            hasRedeemedWelcome: true,
+            welcomeBonusRedeemedAt: serverTimestamp()
+          });
+
+          // Record the redemption
+          const redemptionRef = doc(collection(db, 'bonusRedemptions'));
+          transaction.set(redemptionRef, {
+            userId: user.uid,
+            type: 'welcome',
+            code: code,
+            amount: welcomeBonus.perUserAmount,
+            timestamp: serverTimestamp()
+          });
+        });
+
+        setWelcomeCode('');
+        setModalConfig({
+          show: true,
+          title: 'Success!',
+          message: `Welcome bonus of ${welcomeBonus.perUserAmount} credits redeemed!`,
+          type: 'success'
+        });
+      } else {
+        // Regular bonus code redemption
+        const userRedeemedCodes = userDoc.data().redeemedCodes || {};
+        if (userRedeemedCodes[code]) {
+          setBonusError('You have already redeemed this code');
+          setModalConfig({
+            show: true,
+            title: 'Error',
+            message: 'You have already redeemed this code',
+            type: 'error'
+          });
+          return;
+        }
+     
+        const bonusCodesRef = collection(db, 'bonusCodes');
+        const codeQuery = query(bonusCodesRef, where('code', '==', code));
+        const codeDoc = await getDocs(codeQuery);
+     
+        if (codeDoc.empty) {
+          setBonusError('Invalid code');
+          return;
+        }
+     
+        const validCode = codeDoc.docs[0].data();
+        
+        if (!validCode.active) {
+          setBonusError('This code has expired');
+          return;
+        }
+     
+        if (validCode.currentRedemptions >= validCode.maxRedemptions) {
+          setBonusError('This code has reached maximum redemptions');
+          return;
+        }
+     
+        if (validCode.minWager) {
+          const userWager = userDoc.data().stats?.wagered || 0;
+          if (userWager < validCode.minWager) {
+            setBonusError(`Minimum wager requirement of ${validCode.minWager} not met`);
+            return;
+          }
+        }
+     
+        await runTransaction(db, async (transaction) => {
+          const codeRef = codeDoc.docs[0].ref;
+          transaction.update(codeRef, {
+            currentRedemptions: increment(1)
+          });
+     
+          const currentBalance = userDoc.data().balance || 0;
+          transaction.update(userRef, {
+            balance: currentBalance + validCode.perUserAmount,
+            lastBonus: serverTimestamp(),
+            [`redeemedCodes.${code}`]: {
+              amount: validCode.perUserAmount,
+              redeemedAt: serverTimestamp()
+            }
+          });
+     
+          const redemptionRef = doc(collection(db, 'bonusRedemptions'));
+          transaction.set(redemptionRef, {
+            userId: user.uid,
+            code: code,
+            amount: validCode.perUserAmount,
+            timestamp: serverTimestamp()
+          });
+        });
+     
+        setBonusCode('');
+        setModalConfig({
+          show: true,
+          title: 'Success!',
+          message: `Successfully redeemed ${validCode.perUserAmount} credits!`,
+          type: 'success'
+        });
+      }
     } catch (error) {
       console.error('Error redeeming code:', error);
+      setBonusError('Failed to redeem code. Please try again.');
+      setModalConfig({
+        show: true,
+        title: 'Error',
+        message: 'Failed to redeem code. Please try again.',
+        type: 'error'
+      });
     } finally {
       setLoading(false);
     }
   };
 
+  const [showWelcomeInput, setShowWelcomeInput] = useState(true);
+
+  useEffect(() => {
+    const checkWelcomeBonusStatus = async () => {
+      if (user) {
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        if (userDoc.exists() && userDoc.data().hasRedeemedWelcome) {
+          setShowWelcomeInput(false);
+        }
+      }
+    };
+    checkWelcomeBonusStatus();
+  }, [user]);
+
   return (
     <div className="space-y-8">
-      <Card title="Welcome Offer" icon={Crown}>
-        <div className="space-y-6">
-          <p className="text-white/60">
-            To claim your welcome offer, please enter your code within 24 hours of signing up.
-          </p>
-          <InputField
-            value={welcomeCode}
-            onChange={(e) => setWelcomeCode(e.target.value)}
-            placeholder="Enter welcome code"
-            icon={Gift}
-          />
-          <Button
-            onClick={() => handleRedeemCode(welcomeCode, 'welcome')}
-            loading={loading}
-            disabled={!welcomeCode}
-          >
-            Claim Welcome Offer
-          </Button>
-        </div>
-      </Card>
+      {showWelcomeInput && (
+        <Card title="Welcome Offer" icon={Crown}>
+          <div className="space-y-6">
+            <p className="text-white/60">
+              To claim your welcome offer, please enter your code within 24 hours of signing up.
+            </p>
+            <div className="relative">
+              <InputField
+                value={welcomeCode}
+                onChange={(e) => setWelcomeCode(e.target.value.trim())}
+                placeholder="Enter welcome code"
+                icon={Gift}
+                error={bonusError}
+              />
+            </div>
+            <Button
+              onClick={() => handleRedeemCode(welcomeCode, 'welcome')}
+              loading={loading}
+              disabled={!welcomeCode || loading}
+            >
+              Claim Welcome Offer
+            </Button>
+          </div>
+        </Card>
+      )}
 
       <Card title="Bonus Drop" icon={Gift}>
         <div className="space-y-6">
           <p className="text-white/60">
             Find bonus drop codes on our social media's such as Twitter & Telegram.
           </p>
-          <InputField
-            value={bonusCode}
-            onChange={(e) => setBonusCode(e.target.value.toUpperCase())}
-            placeholder="Enter bonus code"
-            icon={Gift}
-          />
+          <div className="relative">
+            <InputField
+              value={bonusCode}
+              onChange={(e) => setBonusCode(e.target.value.trim().toUpperCase())}
+              placeholder="Enter bonus code"
+              icon={Gift}
+              error={bonusError}
+            />
+          </div>
           <Button
             onClick={() => handleRedeemCode(bonusCode, 'bonus')}
             loading={loading}
-            disabled={!bonusCode}
+            disabled={!bonusCode || loading}
           >
             Redeem Bonus
           </Button>
         </div>
       </Card>
+
+      <BonusModal 
+        isOpen={modalConfig.show}
+        onClose={() => setModalConfig(prev => ({ ...prev, show: false }))}
+        title={modalConfig.title}
+        message={modalConfig.message}
+        type={modalConfig.type}
+      />
     </div>
   );
 };
+
 const SettingsPage = () => {
   const location = useLocation();
   const currentSection = location.pathname.split('/')[2] || 'general';
-
+ 
   const renderSection = () => {
     switch (currentSection) {
       case 'security':
@@ -553,7 +776,7 @@ const SettingsPage = () => {
         return <GeneralSettings />;
     }
   };
-
+ 
   return (
     <div className="min-h-screen bg-gray-900">
       <div className="h-40 bg-gradient-to-b from-indigo-500/10 to-transparent" />

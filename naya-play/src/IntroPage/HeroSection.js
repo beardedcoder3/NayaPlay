@@ -12,15 +12,13 @@ const HeroSection = () => {
             <div className="space-y-4">
               <h1 className="text-5xl lg:text-6xl font-bold leading-tight">
                 <span className="bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-400 bg-clip-text text-transparent">
-                  Premium Gaming
+                An unrivalled online
                 </span>
                 <br />
-                <span className="text-white">Experience</span>
+                <span className="text-white">Casino</span>
+                <br />
+               
               </h1>
-              
-              <p className="text-lg text-slate-300 max-w-xl">
-                Join the ultimate online gaming destination where entertainment meets excellence.
-              </p>
             </div>
 
             {/* Auth Section */}
@@ -28,30 +26,29 @@ const HeroSection = () => {
           </div>
 
           {/* Right Section - Images */}
-          <div className="hidden lg:grid grid-cols-1 sm:grid-cols-2 gap-6 relative">
-            {/* Top Image */}
-            <div className="overflow-hidden rounded-2xl shadow-2xl 
+          <div className="hidden lg:flex gap-4 relative">
+            {/* Casino Image */}
+            <div className="flex-1 overflow-hidden rounded-3xl shadow-2xl 
               transform hover:scale-105 transition-transform duration-500
-              border border-white/10">
+              border border-[#1e90ff]/20 aspect-[3/4]">
               <img 
-                src="/assets/hero-1.jpg" 
-                alt="Gaming experience" 
+                src="https://mediumrare.imgix.net/unauth-header-casino-en.png?w=640&h=961&fit=min&auto=format" 
+                alt="Casino experience" 
                 className="w-full h-full object-cover"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent"></div>
+              <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent"></div>
             </div>
 
-            {/* Bottom Image - Offset */}
-            <div className="overflow-hidden rounded-2xl shadow-2xl 
+            {/* Sports Image */}
+            <div className="flex-1 overflow-hidden rounded-3xl shadow-2xl 
               transform hover:scale-105 transition-transform duration-500
-              border border-white/10
-              mt-12 sm:mt-24">
+              border border-[#1e90ff]/20 aspect-[3/4]">
               <img 
-                src="/assets/hero-2.jpg" 
-                alt="Gaming thrills" 
+                src="https://img.freepik.com/free-photo/spinning-roulette-wheel-blue-flame-jackpot-casino-ultimate-success-generated-by-ai_188544-55617.jpg?t=st=1735650338~exp=1735653938~hmac=a646ae88f5d910f876d7ccf6e81afd48b959cae2d878449ba0355d6514375094&w=1380" 
+                alt="Sports experience" 
                 className="w-full h-full object-cover"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent"></div>
+              <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent"></div>
             </div>
 
             {/* Decorative Elements */}

@@ -6,7 +6,6 @@ import {
   Users,
   DollarSign,
   Gamepad2,
-  Settings,
   Shield,
   LogOut,
   Bell,
@@ -59,24 +58,14 @@ const MENU_ITEMS = [
     path: `${ADMIN_CONFIG.SECURE_PATH}/dashboard/support`,
     baseRoute: 'support'
   },
-  {
-    title: 'Games',
-    icon: Gamepad2,
-    path: `${ADMIN_CONFIG.SECURE_PATH}/dashboard/games`,
-    baseRoute: 'games'
-  },
+  
   {
     title: 'Bonus Codes',
     icon: Gift,
     path: `${ADMIN_CONFIG.SECURE_PATH}/dashboard/bonus`,
     baseRoute: 'bonus'
   },
-  {
-    title: 'Settings',
-    icon: Settings,
-    path: `${ADMIN_CONFIG.SECURE_PATH}/dashboard/settings`,
-    baseRoute: 'settings'
-  },
+ 
   {
     title: 'Agents',
     icon: Users,
@@ -509,7 +498,6 @@ const AdminDashboard = () => {
             <Route path="games" element={<div>Games Management</div>} />
             <Route path="bonus" element={<AdminBonusManager />} />
             <Route path="support" element={<AdminSupportDashboard />} />
-            <Route path="settings" element={<div>Settings</div>} />
             <Route path="agents" element={<AgentManagement />} />
             <Route path="support-agents" element={<SupportAgentManagement />} />
           </Routes>

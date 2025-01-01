@@ -1,203 +1,185 @@
-import React, { useState, useRef } from 'react';
-import { ChevronLeft, ChevronRight, Gamepad2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { db } from '../firebase';
+import { getDocs, writeBatch } from 'firebase/firestore';
+import { Gamepad2 } from 'lucide-react';
 
-const GameCard = ({ game, isCenter }) => {
+const GameCard = ({ title, players }) => {
   const navigate = useNavigate();
-  const images = {
-    "Cyberpunk 2077": "https://wallpapercat.com/w/full/2/6/4/656-3840x2160-desktop-4k-red-dead-redemption-background.jpg",
-    "God of War Ragnarök": "https://gmedia.playstation.com/is/image/SIEPDC/god-of-war-ragnarok-store-art-01-10sep21$ru?$native$",
-    "Elden Ring": "https://wallpapercat.com/w/full/8/d/6/110203-1440x2160-samsung-hd-gran-turismo-7-wallpaper-photo.jpg",
-    "Spider-Man 2": "https://wallpapercat.com/w/full/f/e/c/2475-1920x1080-desktop-1080p-grand-theft-auto-5-background-image.jpg",
-    "Final Fantasy XVI": "https://images.alphacoders.com/563/thumb-1920-563020.jpg",
-    "The Last of Us Part II": "https://images2.alphacoders.com/149/thumb-1920-149660.jpg",
-    "Ghost of Tsushima": "https://wallpapercat.com/w/full/2/6/4/656-3840x2160-desktop-4k-red-dead-redemption-background.jpg"
+  
+  const gameImages = {
+    'MINES': 'https://mediumrare.imgix.net/15a51a2ae2895872ae2b600fa6fe8d7f8d32c9814766b66ddea2b288d04ba89c?format=auto&auto=format&q=90&w=334&dpr=2',
+    'DICE': 'https://mediumrare.imgix.net/30688668d7d2d48d472edd0f1e2bca0758e7ec51cbab8c04d8b7f157848640e0?format=auto&auto=format&q=90&w=334&dpr=2',
+    'LIMBO': 'https://mediumrare.imgix.net/11caec5df20098884ae9071848e1951b8b34e5ec84a7241f2e7c5afd4b323dfd?format=auto&auto=format&q=90&w=334&dpr=2',
+    'CRASH': 'https://mediumrare.imgix.net/c830595cbd07b2561ac76a365c2f01869dec9a8fe5e7be30634d78c51b2cc91e?format=auto&auto=format&q=90&w=334&dpr=2',
   };
 
   const handleClick = () => {
     const routes = {
-      "Cyberpunk 2077": '/mines',
-      "God of War Ragnarök": '/limbo',
-      "Elden Ring": '/crash',
-      "Spider-Man 2": '/wheel',
-       "Final Fantasy XVI": '/dice'
+      'MINES': '/mines',
+      'DICE': '/dice',
+      'LIMBO': '/limbo',
+      'CRASH': '/crash',
     };
     
-    if (routes[game.title]) {
-      navigate(routes[game.title]);
+    if (routes[title]) {
+      navigate(routes[title]);
     }
   };
 
   return (
     <div 
       onClick={handleClick}
-      className={`relative flex-shrink-0 w-[500px] mx-6 transition-all duration-700 ease-out cursor-pointer
-        ${isCenter ? 'scale-100 z-10 hover:scale-[1.02]' : 'scale-[0.9] opacity-40 z-0 pointer-events-none'}
-        hover:z-20`}
+      className="relative group cursor-pointer w-48"
     >
-      <div className="relative overflow-hidden rounded-xl bg-[#0f1923]/40
-        transition-all duration-500">
-        {/* Image Container */}
-        <div className="aspect-[16/9] overflow-hidden">
-          <img
-            src={images[game.title] || '/api/placeholder/400/225'}
-            alt={game.title}
-            className="w-full h-full object-cover transform transition-transform duration-1000
-              hover:[&>*]:scale-105"
+      <div className="relative h-64 rounded-xl overflow-hidden transition-all duration-300 ease-out
+        shadow-md hover:shadow-xl">
+        {/* Background Image */}
+        <div className="absolute inset-0">
+          <img 
+            loading="lazy"
+            src={gameImages[title]} 
+            alt={title}
+            width="167"
+            height="223"
+            draggable="false"
+            className="w-full h-full transition-transform duration-300 ease-out
+              group-hover:scale-[1.02]"
           />
-          
-          {/* Base gradient overlay */}
-          <div className="absolute inset-0 bg-gradient-to-t 
-            from-black/80 via-black/20 to-transparent opacity-80" />
-          
-          {/* Hover gradient - only applies to hovered card */}
-          <div className="absolute inset-0 opacity-0 hover:opacity-100
-            bg-gradient-to-t from-[#0072ce]/30 via-[#0072ce]/5 to-transparent
-            transition-opacity duration-700" />
+          {/* Overlay Gradient */}
+          <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-gray-900/50 to-transparent
+            opacity-80" />
         </div>
 
-        {/* Content Overlay */}
-        <div className="absolute bottom-0 left-0 right-0 p-6 transition-transform duration-500">
-          {/* Genre Tag */}
-          <div className="flex items-center space-x-3 mb-2 opacity-70
-            transition-transform duration-500">
-            <span className="px-3 py-0.5 rounded-full bg-white/10 backdrop-blur-sm
-              text-white/90 text-xs font-medium">
-              {game.genre}
+        {/* Content */}
+        <div className="relative h-full flex flex-col justify-between p-4">
+          {/* NayaPlay Originals Badge */}
+          <div className="text-center">
+            <span className="inline-block px-3 py-1 bg-white/10 backdrop-blur-sm rounded-full
+              text-white/90 text-xs tracking-wider">
+              NayaPlay Originals
             </span>
           </div>
-          
-          {/* Title */}
-          <h3 className="text-2xl font-semibold text-white mb-2 tracking-wide
-            transition-transform duration-500">
-            {game.title}
-          </h3>
 
-          {/* Play Button - Only appears on individual hover */}
-          <button className="mt-2 px-6 py-2 rounded-lg bg-white/10 backdrop-blur-sm text-white/90 
-            text-sm font-medium hover:bg-white/20 transition-all duration-500 
-            opacity-0 hover:opacity-100 transform translate-y-4 
-            hover:translate-y-0 border border-white/10">
-            Play Now
-          </button>
+          {/* Bottom Content */}
+          <div className="text-center">
+            
+            {/* Player Count */}
+            <div className="flex items-center justify-center space-x-2">
+              <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+              <span className="text-white/90 text-sm">
+                {players?.toLocaleString() || '0'} playing
+              </span>
+            </div>
+          </div>
         </div>
-
-        {/* Subtle border effect only on hovered card */}
-        <div className="absolute inset-0 opacity-0 hover:opacity-100
-          transition-opacity duration-500 pointer-events-none
-          border border-white/10 rounded-xl" />
       </div>
     </div>
   );
 };
 
-const GameCarousel = () => {
-  const scrollRef = useRef(null);
-  const [showLeftArrow, setShowLeftArrow] = useState(false);
-  const [showRightArrow, setShowRightArrow] = useState(true);
-  const [centerIndex, setCenterIndex] = useState(0);
+const GameSlidePart2 = () => {
+  const [activePlayers, setActivePlayers] = useState({});
+  const [games] = useState([
+    { id: 'mines', title: 'MINES' },
+    { id: 'dice', title: 'DICE' },
+    { id: 'limbo', title: 'LIMBO' },
+    { id: 'crash', title: 'CRASH' },
+  ]);
 
-  const games = [
-    { id: 1, title: "Cyberpunk 2077", genre: "Action RPG" },
-    { id: 2, title: "God of War Ragnarök", genre: "Action-Adventure" },
-    { id: 3, title: "Elden Ring", genre: "Action RPG" },
-    { id: 5, title: "Spider-Man 2", genre: "Action-Adventure" },
-    { id: 6, title: "Final Fantasy XVI", genre: "Action RPG" },
-    { id: 7, title: "The Last of Us Part II", genre: "Action-Adventure" },
-    { id: 8, title: "Ghost of Tsushima", genre: "Action-Adventure" }
-  ];
+  useEffect(() => {
+    // Get only active users from the last 5 minutes
+    const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+    const activeUsersRef = collection(db, 'activeUsers');
+    const q = query(
+      activeUsersRef,
+      where('lastActive', '>', fiveMinutesAgo)
+    );
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const counts = {};
+      
+      // Initialize all games with 0 players
+      games.forEach(game => {
+        counts[game.id] = 0;
+      });
 
-  const handleScroll = (direction) => {
-    const container = scrollRef.current;
-    const cardWidth = 512; // card width (500px) + margin (12px)
-    const scrollAmount = cardWidth;
+      // Count active users per game
+      snapshot.docs.forEach(doc => {
+        const data = doc.data();
+        if (data.gameId && counts.hasOwnProperty(data.gameId)) {
+          counts[data.gameId]++;
+        }
+      });
 
-    const newScrollPosition = direction === 'left'
-      ? container.scrollLeft - scrollAmount
-      : container.scrollLeft + scrollAmount;
-
-    container.scrollTo({
-      left: newScrollPosition,
-      behavior: 'smooth'
+      setActivePlayers(counts);
     });
 
-    const newCenterIndex = direction === 'left'
-      ? Math.max(0, centerIndex - 1)
-      : Math.min(games.length - 1, centerIndex + 1);
-    
-    setCenterIndex(newCenterIndex);
-    
-    setShowLeftArrow(newScrollPosition > 0);
-    setShowRightArrow(
-      newScrollPosition < container.scrollWidth - container.offsetWidth - 10
-    );
-  };
+    // Cleanup function
+    const cleanupStalePresence = async () => {
+      try {
+        const staleRef = collection(db, 'activeUsers');
+        const staleQ = query(
+          staleRef,
+          where('lastActive', '<', Date.now() - 5 * 60 * 1000)
+        );
+        
+        const snapshot = await getDocs(staleQ);
+        const batch = writeBatch(db);
+        
+        snapshot.docs.forEach(doc => {
+          batch.delete(doc.ref);
+        });
+        
+        await batch.commit();
+      } catch (error) {
+        console.error('Error cleaning up stale presence:', error);
+      }
+    };
+
+    // Run cleanup every minute
+    const cleanupInterval = setInterval(cleanupStalePresence, 60 * 1000);
+
+    // Cleanup subscriptions
+    return () => {
+      unsubscribe();
+      clearInterval(cleanupInterval);
+    };
+  }, [games]);
 
   return (
-    <div className="relative bg-[#0f1923] py-16">
-      {/* Subtle background gradient */}
-      <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/50" />
-      
-      <div className="max-w-[1800px] mx-auto relative px-16">
+    <div className="w-full bg-[#0f1923] py-24">
+      <div className="max-w-7xl mx-auto px-8">
         {/* Section Header */}
-        <div className="flex items-center mb-12 pl-4">
+        <div className="flex items-center space-x-4 mb-12">
+          <div className="flex items-center justify-center w-16 h-16 rounded-2xl 
+            bg-[#0072ce]/10 border border-[#0072ce]/20">
+            <Gamepad2 size={32} className="text-[#0072ce]" />
+          </div>
           <div>
-            <h2 className="text-2xl font-medium text-white/90 tracking-wide mb-1">
+            <h2 className="text-3xl font-bold text-white mb-1">
               Featured Games
             </h2>
-            <p className="text-white/50 text-sm">
-              Experience our collection of premium games
+            <p className="text-gray-400">
+              Our most popular games
             </p>
           </div>
         </div>
 
-        {/* Carousel Container */}
-        <div className="relative group">
-          {/* Navigation Arrows */}
-          <button
-            onClick={() => handleScroll('left')}
-            className={`absolute -left-4 top-1/2 -translate-y-1/2 z-30
-              w-10 h-10 flex items-center justify-center
-              bg-black/20 backdrop-blur-sm text-white/70 rounded-full
-              hover:bg-black/40 hover:text-white transition-all duration-300
-              ${showLeftArrow ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4 pointer-events-none'}`}
-          >
-            <ChevronLeft size={20} />
-          </button>
-
-          {/* Games Container */}
-          <div
-            ref={scrollRef}
-            className="flex overflow-x-hidden scroll-smooth py-4"
-            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-          >
-            {games.map((game, index) => (
-              <GameCard 
-                key={game.id} 
-                game={game} 
-                isCenter={index === centerIndex}
-              />
-            ))}
-          </div>
-
-          <button
-            onClick={() => handleScroll('right')}
-            className={`absolute -right-4 top-1/2 -translate-y-1/2 z-30
-              w-10 h-10 flex items-center justify-center
-              bg-black/20 backdrop-blur-sm text-white/70 rounded-full
-              hover:bg-black/40 hover:text-white transition-all duration-300
-              ${showRightArrow ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-4 pointer-events-none'}`}
-          >
-            <ChevronRight size={20} />
-          </button>
-
-          {/* Subtle edge gradients */}
-          <div className="absolute inset-y-0 left-0 w-32 bg-gradient-to-r from-[#0f1923] to-transparent pointer-events-none z-20" />
-          <div className="absolute inset-y-0 right-0 w-32 bg-gradient-to-l from-[#0f1923] to-transparent pointer-events-none z-20" />
+        {/* Games Container */}
+        <div className="flex overflow-x-auto gap-6 pb-4 scrollbar-hide">
+          {games.map(game => (
+            <GameCard
+              key={game.id}
+              title={game.title}
+              players={activePlayers[game.id] || 0}
+            />
+          ))}
         </div>
       </div>
     </div>
   );
 };
 
-export default GameCarousel;
+export default GameSlidePart2;

@@ -51,7 +51,12 @@ import {
   HelpCircle,
   AlertTriangle,
   Shield,
-  Settings
+  Settings,
+  Zap,
+  Sparkles,
+  Ghost,
+ PcCase,
+  Lock
 } from 'lucide-react';
 import useAuth from '../Auth/useAuth';
 import { uploadFileToS3 } from '../Aws/uploadService';
@@ -59,38 +64,53 @@ import { uploadFileToS3 } from '../Aws/uploadService';
 const CATEGORIES = [
   { 
     id: 'payment', 
-    label: 'Payment Issue', 
-    icon: <AlertTriangle className="w-6 h-6" />, 
+    label: 'Payment & Billing',
+    icon: <Zap className="w-6 h-6" />,
     color: 'from-violet-500 to-purple-600',
-    description: 'Issues with transactions or billing'
+    description: 'Resolve payment issues, billing inquiries, and subscription management'
   },
   { 
     id: 'technical', 
-    label: 'Technical Support', 
-    icon: <Settings className="w-6 h-6" />, 
+    label: 'Technical Support',
+    icon: <PcCase className="w-6 h-6" />,
     color: 'from-blue-500 to-indigo-600',
-    description: 'Help with technical problems'
+    description: 'Get help with technical problems, bugs, and system performance'
   },
   { 
     id: 'account', 
-    label: 'Account Help', 
-    icon: <Shield className="w-6 h-6" />, 
+    label: 'Account & Security',
+    icon: <Lock className="w-6 h-6" />,
     color: 'from-emerald-500 to-teal-600',
-    description: 'Account access and security'
+    description: 'Manage account settings, security, and access controls'
   },
   { 
     id: 'general', 
-    label: 'General Question', 
-    icon: <HelpCircle className="w-6 h-6" />, 
+    label: 'General Inquiries',
+    icon: <HelpCircle className="w-6 h-6" />,
     color: 'from-pink-500 to-rose-600',
-    description: 'Other inquiries'
+    description: 'Ask questions about our products, services, and features'
   }
 ];
 
 const PRIORITIES = [
-  { id: 'low', label: 'Low Priority', color: 'bg-emerald-900 text-emerald-200' },
-  { id: 'medium', label: 'Medium Priority', color: 'bg-amber-900 text-amber-200' },
-  { id: 'high', label: 'High Priority', color: 'bg-rose-900 text-rose-200' }
+  { 
+    id: 'low', 
+    label: 'Low Priority',
+    color: 'bg-emerald-900/40 text-emerald-200 border-emerald-500/20',
+    description: 'General inquiries and non-urgent matters'
+  },
+  { 
+    id: 'medium', 
+    label: 'Medium Priority',
+    color: 'bg-amber-900/40 text-amber-200 border-amber-500/20',
+    description: 'Important issues affecting your work'
+  },
+  { 
+    id: 'high', 
+    label: 'High Priority',
+    color: 'bg-rose-900/40 text-rose-200 border-rose-500/20',
+    description: 'Critical issues requiring immediate attention'
+  }
 ];
 
 const MessageStatus = ({ status }) => {
@@ -104,6 +124,37 @@ const MessageStatus = ({ status }) => {
     <div className="inline-flex items-center">
       {statusMap[status]}
     </div>
+  );
+};
+
+const StatusBadge = ({ status }) => {
+  const statusConfig = {
+    active: {
+      color: 'bg-emerald-900/40 text-emerald-200 border-emerald-500/20',
+      icon: <Zap className="w-3 h-3 mr-1" />
+    },
+    waiting: {
+      color: 'bg-amber-900/40 text-amber-200 border-amber-500/20',
+      icon: <Clock className="w-3 h-3 mr-1" />
+    },
+    closed: {
+      color: 'bg-gray-800/40 text-gray-300 border-gray-600/20',
+      icon: <CheckCircle className="w-3 h-3 mr-1" />
+    }
+  };
+
+  const config = statusConfig[status] || statusConfig.closed;
+
+  return (
+    <motion.span
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className={`px-2 py-1 rounded-full text-xs font-medium border
+        inline-flex items-center ${config.color}`}
+    >
+      {config.icon}
+      {status}
+    </motion.span>
   );
 };
 
@@ -132,7 +183,7 @@ const TicketHistory = ({ tickets, onSelectTicket, onClose }) => {
           >
             <ArrowLeft className="h-5 w-5 text-gray-400" />
           </button>
-          <h3 className="text-lg font-semibold text-white">My Tickets</h3>
+          <h3 className="text-lg font-semibold text-white">Ticket History</h3>
         </div>
 
         <div className="flex space-x-2">
@@ -154,7 +205,7 @@ const TicketHistory = ({ tickets, onSelectTicket, onClose }) => {
             className="px-4 py-2 bg-gray-800/50 border border-gray-700 rounded-lg 
               text-white focus:ring-2 focus:ring-indigo-500 transition-colors"
           >
-            <option value="all">All</option>
+            <option value="all">All Status</option>
             <option value="active">Active</option>
             <option value="closed">Closed</option>
             <option value="waiting">Waiting</option>
@@ -166,10 +217,10 @@ const TicketHistory = ({ tickets, onSelectTicket, onClose }) => {
         {filteredTickets.map((ticket) => (
           <motion.div
             key={ticket.id}
-            whileHover={{ x: 4 }}
-            className="p-4 bg-gray-800/50 rounded-lg cursor-pointer 
+            whileHover={{ x: 4, scale: 1.02 }}
+            className="p-4 bg-gray-800/50 rounded-xl cursor-pointer 
               hover:bg-gray-800/80 border border-gray-700/50 
-              hover:border-gray-600/50 transition-all duration-200"
+              hover:border-gray-600/50 transition-all duration-300"
             onClick={() => onSelectTicket(ticket)}
           >
             <div className="flex justify-between items-start mb-2">
@@ -193,21 +244,6 @@ const TicketHistory = ({ tickets, onSelectTicket, onClose }) => {
   );
 };
 
-const StatusBadge = ({ status }) => {
-  const statusStyles = {
-    active: 'bg-emerald-900/50 text-emerald-200 border-emerald-500/20',
-    waiting: 'bg-amber-900/50 text-amber-200 border-amber-500/20',
-    closed: 'bg-gray-800/50 text-gray-300 border-gray-600/20'
-  };
-
-  return (
-    <span className={`px-2 py-1 rounded-full text-xs font-medium border 
-      ${statusStyles[status] || statusStyles.closed}`}>
-      {status}
-    </span>
-  );
-};
-
 const Message = ({ message, isUser }) => {
   const [showImagePreview, setShowImagePreview] = useState(false);
   const [selectedImage, setSelectedImage] = useState(null);
@@ -220,13 +256,13 @@ const Message = ({ message, isUser }) => {
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4`}>
       <div className={`max-w-[80%] ${isUser ? 'items-end' : 'items-start'}`}>
-        <div className={`rounded-2xl px-4 py-3 
+        <div className={`rounded-2xl px-4 py-3 shadow-lg backdrop-blur-sm
           ${isUser 
             ? 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white' 
             : message.senderType === 'system'
               ? 'bg-gray-800/80 text-gray-200 border border-gray-700'
               : 'bg-gray-800/80 text-gray-200 border border-gray-700'
-          } shadow-lg backdrop-blur-sm`}
+          }`}
         >
           {message.senderType !== 'system' && (
             <p className="text-xs opacity-70 mb-1">
@@ -310,7 +346,10 @@ const ImagePreviewModal = ({ isOpen, onClose, imageUrl }) => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div 
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
         className="absolute inset-0 bg-black/90 backdrop-blur-sm"
         onClick={onClose}
       />
@@ -333,7 +372,7 @@ const ImagePreviewModal = ({ isOpen, onClose, imageUrl }) => {
           <button 
             onClick={onClose}
             className="p-2 bg-gray-800/80 rounded-full text-white 
-              hover:bg-gray-700/80 transition-colors"
+            hover:bg-gray-700/80 transition-colors"
           >
             <X size={20} />
           </button>
@@ -378,432 +417,454 @@ const FilePreview = ({ file, onRemove }) => {
           </div>
         )}
         <button
-         onClick={onRemove}
-         className="absolute -top-1 -right-1 p-1 bg-red-500 text-white rounded-full 
-           opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
-       >
-         <XCircle className="h-4 w-4" />
-       </button>
-     </div>
-     <p className="text-xs text-gray-400 mt-1 truncate max-w-[64px]">
-       {file.name}
-     </p>
-   </div>
- );
+          onClick={onRemove}
+          className="absolute -top-1 -right-1 p-1 bg-red-500 text-white rounded-full 
+            opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+        >
+          <XCircle className="h-4 w-4" />
+        </button>
+      </div>
+      <p className="text-xs text-gray-400 mt-1 truncate max-w-[64px]">
+        {file.name}
+      </p>
+    </div>
+  );
 };
 
 const ModernSupportWidget = () => {
- const [isOpen, setIsOpen] = useState(false);
- const [message, setMessage] = useState('');
- const [activeTicket, setActiveTicket] = useState(null);
- const [messages, setMessages] = useState([]);
- const [loading, setLoading] = useState(false);
- const [subject, setSubject] = useState('');
- const [category, setCategory] = useState('');
- const [priority, setPriority] = useState('medium');
- const [step, setStep] = useState('main');
- const [showEmojiPicker, setShowEmojiPicker] = useState(false);
- const [attachments, setAttachments] = useState([]);
- const [unreadCount, setUnreadCount] = useState(0);
- const [allTickets, setAllTickets] = useState([]);
- const [playNotification] = useSound(notificationSound);
- const messagesEndRef = useRef(null);
- const fileInputRef = useRef(null);
- const { user } = useAuth();
+  
+  const [isOpen, setIsOpen] = useState(false);
+  const [message, setMessage] = useState('');
+  const [activeTicket, setActiveTicket] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [subject, setSubject] = useState('');
+  const [category, setCategory] = useState('');
+  const [priority, setPriority] = useState('medium');
+  const [step, setStep] = useState('main');
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [attachments, setAttachments] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [allTickets, setAllTickets] = useState([]);
+  const [playNotification] = useSound(notificationSound);
+  const messagesEndRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const { user } = useAuth();
 
- const scrollToBottom = () => {
-   messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
- };
+  useEffect(() => {
+    const handleOpenWidget = () => setIsOpen(true);
+    document.addEventListener('openSupportWidget', handleOpenWidget);
+    return () => document.removeEventListener('openSupportWidget', handleOpenWidget);
+  }, []);
+  
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
 
- useEffect(() => {
-   scrollToBottom();
- }, [messages]);
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
 
- useEffect(() => {
-   if (!user || !isOpen) return;
+  useEffect(() => {
+    if (!user || !isOpen) return;
 
-   const q = query(
-     collection(db, 'supportTickets'),
-     where('userId', '==', user.uid),
-     orderBy('createdAt', 'desc')
-   );
+    const q = query(
+      collection(db, 'supportTickets'),
+      where('userId', '==', user.uid),
+      orderBy('createdAt', 'desc')
+    );
 
-   const unsubscribe = onSnapshot(q, (snapshot) => {
-     const tickets = snapshot.docs.map(doc => ({
-       id: doc.id,
-       ...doc.data(),
-     }));
-     setAllTickets(tickets);
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const tickets = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      setAllTickets(tickets);
 
-     const active = tickets.find(t => t.status === 'active' || t.status === 'waiting');
-     if (active) {
-       setActiveTicket(active);
-       setStep('chat');
-     }
-   });
+      const active = tickets.find(t => t.status === 'active' || t.status === 'waiting');
+      if (active) {
+        setActiveTicket(active);
+        setStep('chat');
+      }
+    });
 
-   return () => unsubscribe();
- }, [user, isOpen]);
+    return () => unsubscribe();
+  }, [user, isOpen]);
 
- useEffect(() => {
-   if (!activeTicket) return;
+  useEffect(() => {
+    if (!activeTicket) return;
 
-   const q = query(
-     collection(db, 'supportMessages'),
-     where('ticketId', '==', activeTicket.id),
-     orderBy('timestamp', 'asc')
-   );
+    const q = query(
+      collection(db, 'supportMessages'),
+      where('ticketId', '==', activeTicket.id),
+      orderBy('timestamp', 'asc')
+    );
 
-   const unsubscribe = onSnapshot(q, {
-     next: (snapshot) => {
-       const messageData = snapshot.docs.map(doc => ({
-         id: doc.id,
-         ...doc.data()
-       }));
-       setMessages(messageData);
+    const unsubscribe = onSnapshot(q, {
+      next: (snapshot) => {
+        const messageData = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        setMessages(messageData);
 
-       const unreadMessages = messageData.filter(
-         msg => msg.senderType === 'agent' && !msg.read
-       );
+        const unreadMessages = messageData.filter(
+          msg => msg.senderType === 'agent' && !msg.read
+        );
 
-       if (unreadMessages.length > 0 && isOpen) {
-         const batch = writeBatch(db);
-         unreadMessages.forEach(msg => {
-           const msgRef = doc(db, 'supportMessages', msg.id);
-           batch.update(msgRef, { 
-             read: true,
-             status: 'seen'
-           });
-         });
-         batch.commit().catch(error => {
-           console.error('Error updating message status:', error);
-         });
-       }
-     },
-     error: (error) => {
-       console.error('Error loading messages:', error);
-       setMessages([]);
-     }
-   });
+        if (unreadMessages.length > 0 && isOpen) {
+          const batch = writeBatch(db);
+          unreadMessages.forEach(msg => {
+            const msgRef = doc(db, 'supportMessages', msg.id);
+            batch.update(msgRef, { 
+              read: true,
+              status: 'seen'
+            });
+          });
+          batch.commit().catch(error => {
+            console.error('Error updating message status:', error);
+          });
+        }
+      },
+      error: (error) => {
+        console.error('Error loading messages:', error);
+        setMessages([]);
+      }
+    });
 
-   return () => unsubscribe();
- }, [activeTicket, isOpen]);
+    return () => unsubscribe();
+  }, [activeTicket, isOpen]);
 
- const updateMessageStatus = async (messageId, status) => {
-   try {
-     await updateDoc(doc(db, 'supportMessages', messageId), { status });
-   } catch (error) {
-     console.error('Error updating message status:', error);
-   }
- };
+  const updateMessageStatus = async (messageId, status) => {
+    try {
+      await updateDoc(doc(db, 'supportMessages', messageId), { status });
+    } catch (error) {
+      console.error('Error updating message status:', error);
+    }
+  };
 
- const handleFileUpload = async (files) => {
-   const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'application/pdf'];
-   const maxSize = 5 * 1024 * 1024; // 5MB
- 
-   try {
-     const validFiles = Array.from(files).filter(file => 
-       allowedTypes.includes(file.type) && file.size <= maxSize
-     );
- 
-     if (validFiles.length === 0) {
-       console.error('Invalid file type or size');
-       return;
-     }
- 
-     setLoading(true);
- 
-     const uploadedFiles = await Promise.all(
-       validFiles.map(file => uploadFileToS3(file, activeTicket.id))
-     );
- 
-     const messageRef = await addDoc(collection(db, 'supportMessages'), {
-       ticketId: activeTicket.id,
-       content: message.trim() || 'Sent attachments',
-       sender: user.uid,
-       senderType: 'user',
-       timestamp: serverTimestamp(),
-       attachments: uploadedFiles,
-       status: 'sent',
-       read: false
-     });
+  const handleFileUpload = async (files) => {
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'application/pdf'];
+    const maxSize = 5 * 1024 * 1024; // 5MB
+  
+    try {
+      const validFiles = Array.from(files).filter(file => 
+        allowedTypes.includes(file.type) && file.size <= maxSize
+      );
+  
+      if (validFiles.length === 0) {
+        console.error('Invalid file type or size');
+        return;
+      }
+  
+      setLoading(true);
+  
+      const uploadedFiles = await Promise.all(
+        validFiles.map(file => uploadFileToS3(file, activeTicket.id))
+      );
+  
+      const messageRef = await addDoc(collection(db, 'supportMessages'), {
+        ticketId: activeTicket.id,
+        content: message.trim() || 'Sent attachments',
+        sender: user.uid,
+        senderType: 'user',
+        timestamp: serverTimestamp(),
+        attachments: uploadedFiles,
+        status: 'sent',
+        read: false
+      });
 
-     setTimeout(() => updateMessageStatus(messageRef.id, 'delivered'), 1000);
- 
-     setMessage('');
-     setAttachments([]);
-   } catch (error) {
-     console.error('Error handling files:', error);
-   } finally {
-     setLoading(false);
-   }
- };
+      setTimeout(() => updateMessageStatus(messageRef.id, 'delivered'), 1000);
+  
+      setMessage('');
+      setAttachments([]);
+    } catch (error) {
+      console.error('Error handling files:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
- const handleFileDrop = (e) => {
-   e.preventDefault();
-   const files = e.dataTransfer.files;
-   handleFileUpload(files);
- };
+  const handleFileDrop = (e) => {
+    e.preventDefault();
+    const files = e.dataTransfer.files;
+    handleFileUpload(files);
+  };
 
- const handleSendMessage = async (e) => {
-   e.preventDefault();
-   if ((!message.trim() && attachments.length === 0) || !activeTicket) return;
+  const handleSendMessage = async (e) => {
+    e.preventDefault();
+    if ((!message.trim() && attachments.length === 0) || !activeTicket) return;
 
-   setLoading(true);
-   try {
-     let uploadedFiles = [];
-     if (attachments.length > 0) {
-       uploadedFiles = await Promise.all(
-         attachments.map(async (file) => {
-           const result = await uploadFileToS3(file, activeTicket.id);
-           return {
-             name: file.name,
-             url: result.url,
-             type: file.type
-           };
-         })
-       );
-     }
+    setLoading(true);
+    try {
+      let uploadedFiles = [];
+      if (attachments.length > 0) {
+        uploadedFiles = await Promise.all(
+          attachments.map(async (file) => {
+            const result = await uploadFileToS3(file, activeTicket.id);
+            return {
+              name: file.name,
+              url: result.url,
+              type: file.type
+            };
+          })
+        );
+      }
 
-     if (message.trim() || uploadedFiles.length > 0) {
-       const messageRef = await addDoc(collection(db, 'supportMessages'), {
-         ticketId: activeTicket.id,
-         content: message.trim(),
-         sender: user.uid,
-         senderType: 'user',
-         timestamp: serverTimestamp(),
-         attachments: uploadedFiles,
-         status: 'sent',
-         read: false
-       });
+      if (message.trim() || uploadedFiles.length > 0) {
+        const messageRef = await addDoc(collection(db, 'supportMessages'), {
+          ticketId: activeTicket.id,
+          content: message.trim(),
+          sender: user.uid,
+          senderType: 'user',
+          timestamp: serverTimestamp(),
+          attachments: uploadedFiles,
+          status: 'sent',
+          read: false
+        });
 
-       setTimeout(() => updateMessageStatus(messageRef.id, 'delivered'), 1000);
-     }
+        setTimeout(() => updateMessageStatus(messageRef.id, 'delivered'), 1000);
+      }
 
-     await updateDoc(doc(db, 'supportTickets', activeTicket.id), {
-       lastUpdated: serverTimestamp(),
-       status: 'waiting',
-       lastMessage: message.trim() || 'Sent attachments'
-     });
+      await updateDoc(doc(db, 'supportTickets', activeTicket.id), {
+        lastUpdated: serverTimestamp(),
+        status: 'waiting',
+        lastMessage: message.trim() || 'Sent attachments'
+      });
 
-     setMessage('');
-     setAttachments([]);
-   } catch (error) {
-     console.error('Error sending message:', error);
-   }
-   setLoading(false);
- };
+      setMessage('');
+      setAttachments([]);
+    } catch (error) {
+      console.error('Error sending message:', error);
+    }
+    setLoading(false);
+  };
 
- const createNewTicket = async () => {
-   if (!subject.trim() || !category) return;
+  const createNewTicket = async () => {
+    if (!subject.trim() || !category) return;
 
-   setLoading(true);
-   try {
-     const ticketRef = await addDoc(collection(db, 'supportTickets'), {
-       userId: user.uid,
-       userEmail: user.email,
-       subject: subject.trim(),
-       category,
-       priority,
-       status: 'waiting',
-       createdAt: serverTimestamp(),
-       lastUpdated: serverTimestamp(),
-       lastMessage: subject.trim()
-     });
+    setLoading(true);
+    try {
+      const ticketRef = await addDoc(collection(db, 'supportTickets'), {
+        userId: user.uid,
+        userEmail: user.email,
+        subject: subject.trim(),
+        category,
+        priority,
+        status: 'waiting',
+        createdAt: serverTimestamp(),
+        lastUpdated: serverTimestamp(),
+        lastMessage: subject.trim()
+      });
 
-     const messageRef = await addDoc(collection(db, 'supportMessages'), {
-       ticketId: ticketRef.id,
-       content: subject.trim(),
-       sender: user.uid,
-       senderType: 'user',
-       timestamp: serverTimestamp(),
-       status: 'sent',
-       read: false
-     });
+      const messageRef = await addDoc(collection(db, 'supportMessages'), {
+        ticketId: ticketRef.id,
+        content: subject.trim(),
+        sender: user.uid,
+        senderType: 'user',
+        timestamp: serverTimestamp(),
+        status: 'sent',
+        read: false
+      });
 
-     setTimeout(() => updateMessageStatus(messageRef.id, 'delivered'), 1000);
+      setTimeout(() => updateMessageStatus(messageRef.id, 'delivered'), 1000);
 
-     setActiveTicket({
-       id: ticketRef.id,
-       subject: subject.trim(),
-       category,
-       priority,
-       status: 'waiting'
-     });
+      setActiveTicket({
+        id: ticketRef.id,
+        subject: subject.trim(),
+        category,
+        priority,
+        status: 'waiting'
+      });
 
-     setStep('chat');
-   } catch (error) {
-     console.error('Error creating ticket:', error);
-   }
-   setLoading(false);
- };
+      setStep('chat');
+    } catch (error) {
+      console.error('Error creating ticket:', error);
+    }
+    setLoading(false);
+  };
 
- const renderMainMenu = () => (
-  <motion.div
-  initial={{ opacity: 0 }}
-  animate={{ opacity: 1 }}
-  exit={{ opacity: 0 }}
-  className="flex flex-col h-full overflow-hidden bg-[#1a1b1e]"
->
-  <div className="px-6 py-4">
-    <h2 className="text-2xl font-bold text-white mb-6">How can we help?</h2>
-  </div>
+  const renderMainMenu = () => (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="flex flex-col h-full overflow-hidden bg-gray-900/95 backdrop-blur-lg"
+    >
+      <div className="px-6 py-4">
+        <h2 className="text-2xl font-bold bg-gradient-to-r from-white to-gray-300 
+          bg-clip-text text-transparent mb-2">How can we help?</h2>
+        <p className="text-gray-400">Choose a category to get started</p>
+      </div>
 
-  <div className="flex-1 overflow-y-auto">
-    <div className="px-4">
-      {CATEGORIES.map((cat) => (
-        <motion.button
-          key={cat.id}
-          onClick={() => {
-            setCategory(cat.id);
-            setStep('newTicket');
-          }}
-          className="w-full p-4 rounded-lg bg-[#212226] mb-3
-            hover:bg-[#2a2b30] transition-all duration-200 text-left"
-          whileHover={{ scale: 1.01 }}
-          whileTap={{ scale: 0.99 }}
-        >
-          <div className="flex items-center mb-2">
-            <div className={`w-10 h-10 rounded-lg flex items-center justify-center`}
-              style={{
-                backgroundColor: cat.id === 'payment' ? '#7e57c2' :
-                               cat.id === 'technical' ? '#4070f4' :
-                               cat.id === 'account' ? '#26a69a' : '#ec407a'
-              }}>
-              {cat.icon}
+      <div className="flex-1 overflow-y-auto">
+        <div className="px-4 grid grid-cols-1 gap-3">
+          {CATEGORIES.map((cat) => (
+            <motion.button
+              key={cat.id}
+              onClick={() => {
+                setCategory(cat.id);
+                setStep('newTicket');
+              }}
+              className="w-full p-4 rounded-xl bg-gray-800/50 
+                hover:bg-gray-800/80 border border-gray-700/50 
+                hover:border-gray-600/50 transition-all duration-300"
+              whileHover={{ scale: 1.02, y: -2 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              <div className="flex items-center space-x-4">
+                <div className={`w-12 h-12 rounded-xl flex items-center 
+                  justify-center bg-gradient-to-br ${cat.color}`}>
+                  {cat.icon}
+                </div>
+                <div className="flex-1 text-left">
+                  <h3 className="text-base font-medium text-white mb-1">
+                    {cat.label}
+                  </h3>
+                  <p className="text-sm text-gray-400">{cat.description}</p>
+                </div>
+              </div>
+            </motion.button>
+          ))}
+        </div>
+
+        {allTickets.length > 0 && (
+          <div className="mt-8 px-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-medium bg-gradient-to-r 
+                from-white to-gray-300 bg-clip-text text-transparent">
+                Recent Tickets
+              </h3>
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setStep('history')}
+                className="text-sm text-indigo-400 hover:text-indigo-300 
+                  transition-colors duration-200"
+              >
+                View All
+              </motion.button>
+            </div>
+            
+            <div className="space-y-3">
+              {allTickets.slice(0, 3).map((ticket) => (
+                <motion.div
+                  key={ticket.id}
+                  whileHover={{ x: 4, scale: 1.02 }}
+                  className="p-4 bg-gray-800/50 rounded-xl cursor-pointer 
+                    border border-gray-700/50 hover:border-gray-600/50 
+                    hover:bg-gray-800/80 transition-all duration-300"
+                  onClick={() => {
+                    setActiveTicket(ticket);
+                    setStep('chat');
+                  }}
+                >
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="font-medium text-white mb-1">
+                        {ticket.subject}
+                      </p>
+                      <p className="text-sm text-gray-400">
+                        Created {new Date(ticket.createdAt.seconds * 1000)
+                          .toLocaleDateString()}
+                      </p>
+                    </div>
+                    <StatusBadge status={ticket.status} />
+                  </div>
+                </motion.div>
+              ))}
             </div>
           </div>
-          <h3 className="text-base font-medium text-white mb-1">{cat.label}</h3>
-          <p className="text-sm text-gray-400">{cat.description}</p>
-        </motion.button>
-      ))}
-       </div>
+        )}
+      </div>
+    </motion.div>
+  );
 
-       {allTickets.length > 0 && (
-         <div className="mt-8">
-           <div className="flex items-center justify-between mb-4">
-             <h3 className="text-lg font-medium text-white">Recent Tickets</h3>
-             <button
-               onClick={() => setStep('history')}
-               className="text-sm text-indigo-400 hover:text-indigo-300 
-                 transition-colors duration-200"
-             >
-               View All
-             </button>
-           </div>
-           
-           <div className="space-y-3">
-             {allTickets.slice(0, 3).map((ticket) => (
-               <motion.div
-                 key={ticket.id}
-                 whileHover={{ x: 4 }}
-                 className="p-4 bg-gray-800/50 rounded-lg cursor-pointer 
-                   border border-gray-700/50 hover:border-gray-600/50 
-                   hover:bg-gray-800/80 transition-all duration-200"
-                 onClick={() => {
-                   setActiveTicket(ticket);
-                   setStep('chat');
-                 }}
-               >
-                 <div className="flex justify-between items-start ">
-                   <div>
-                     <p className="font-medium text-white">{ticket.subject}</p>
-                     <p className="text-sm text-gray-400">
-                       {new Date(ticket.createdAt.seconds * 1000).toLocaleDateString()}
-                     </p>
-                   </div>
-                   <StatusBadge status={ticket.status} />
-                 </div>
-               </motion.div>
-             ))}
-           </div>
-         </div>
-       )}
-     </div>
-   </motion.div>
- );
+  const renderNewTicket = () => (
+    <motion.div
+      initial={{ opacity: 0, x: 300 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -300 }}
+      className="flex flex-col h-full bg-gray-900"
+    >
+      <div className="flex-none p-4 border-b border-gray-800">
+        <button
+          onClick={() => setStep('main')}
+          className="flex items-center text-gray-400 mb-2 hover:text-gray-200 
+            transition-colors"
+        >
+          <ChevronLeft className="h-5 w-5 mr-1" />
+          Back
+        </button>
+        
+        <div className="mb-4">
+          <h2 className="text-2xl font-bold bg-gradient-to-r from-white to-gray-300 
+            bg-clip-text text-transparent mb-2">Create New Ticket</h2>
+            <p className="text-gray-400">
+            Describe your issue and we'll connect you with our support team.
+          </p>
+        </div>
+      </div>
 
- const renderNewTicket = () => (
-   <motion.div
-     initial={{ opacity: 0, x: 300 }}
-     animate={{ opacity: 1, x: 0 }}
-     exit={{ opacity: 0, x: -300 }}
-     className="flex flex-col h-full"
-   >
-     <div className="p-6">
-       <button
-         onClick={() => setStep('main')}
-         className="flex items-center text-gray-400 mb-6 hover:text-gray-200 
-           transition-colors"
-       >
-         <ChevronLeft className="h-5 w-5 mr-1" />
-         Back
-       </button>
-       
-       <div className="mb-8">
-         <h2 className="text-2xl font-bold bg-gradient-to-r from-white to-gray-300 
-           bg-clip-text text-transparent mb-2">Create New Ticket</h2>
-         <p className="text-gray-400">
-           Describe your issue and we'll connect you with our support team.
-         </p>
-       </div>
+      <div className="flex-1 overflow-y-auto p-4">
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Category
+            </label>
+            <div className="p-3 bg-gray-800/50 border border-gray-700 rounded-lg">
+              <div className="flex items-center space-x-3">
+                {CATEGORIES.find(c => c.id === category)?.icon}
+                <span className="text-white">
+                  {CATEGORIES.find(c => c.id === category)?.label}
+                </span>
+              </div>
+            </div>
+          </div>
 
-       <div className="space-y-6">
-         <div>
-           <label className="block text-sm font-medium text-gray-300 mb-2">
-             Category
-           </label>
-           <div className="p-4 bg-gray-800/50 border border-gray-700 rounded-lg">
-             <div className="flex items-center space-x-3">
-               {CATEGORIES.find(c => c.id === category)?.icon}
-               <span className="text-white">
-                 {CATEGORIES.find(c => c.id === category)?.label}
-               </span>
-             </div>
-           </div>
-         </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Subject
+            </label>
+            <input
+              type="text"
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              className="w-full p-3 bg-gray-800/50 border border-gray-700 rounded-lg 
+                focus:ring-2 focus:ring-indigo-500 text-white placeholder-gray-500 
+                transition-colors"
+              placeholder="Brief description of your issue"
+            />
+          </div>
 
-         <div>
-           <label className="block text-sm font-medium text-gray-300 mb-2">
-             Subject
-           </label>
-           <input
-             type="text"
-             value={subject}
-             onChange={(e) => setSubject(e.target.value)}
-             className="w-full p-4 bg-gray-800/50 border border-gray-700 rounded-lg 
-               focus:ring-2 focus:ring-indigo-500 text-white placeholder-gray-500 
-               transition-colors"
-             placeholder="Brief description of your issue"
-           />
-         </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Priority
+            </label>
+            <select
+              value={priority}
+              onChange={(e) => setPriority(e.target.value)}
+              className="w-full p-3 bg-gray-800/50 border border-gray-700 rounded-lg 
+                focus:ring-2 focus:ring-indigo-500 text-white transition-colors"
+            >
+              {PRIORITIES.map((p) => (
+                <option key={p.id} value={p.id} className="bg-gray-800">
+                  {p.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
 
-         <div>
-           <label className="block text-sm font-medium text-gray-300 mb-2">
-             Priority
-           </label>
-           <select
-             value={priority}
-             onChange={(e) => setPriority(e.target.value)}
-             className="w-full p-4 bg-gray-800/50 border border-gray-700 rounded-lg 
-               focus:ring-2 focus:ring-indigo-500 text-white transition-colors"
-           >
-             {PRIORITIES.map((p) => (
-               <option key={p.id} value={p.id} className="bg-gray-800">
-                 {p.label}
-               </option>
-             ))}
-           </select>
-         </div>
-       </div>
-
-       <motion.button
-         whileHover={{ scale: 1.02 }}
-         whileTap={{ scale: 0.98 }}
-         onClick={createNewTicket}
-         disabled={!subject.trim() || loading}
-         className="w-full mt-8 py-4 bg-gradient-to-r from-indigo-600 to-blue-600 
-         text-white rounded-lg font-medium disabled:opacity-50 
+      <div className="flex-none p-4 border-t border-gray-800 bg-gray-900">
+        <motion.button
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+          onClick={createNewTicket}
+          disabled={!subject.trim() || loading}
+          className="w-full py-3 bg-gradient-to-r from-indigo-600 to-blue-600 
+            text-white rounded-lg font-medium disabled:opacity-50 
             disabled:cursor-not-allowed hover:shadow-lg transition-all duration-200"
         >
           {loading ? (
@@ -823,7 +884,6 @@ const ModernSupportWidget = () => {
       exit={{ opacity: 0 }}
       className="flex flex-col h-full"
     >
-      {/* Chat Header */}
       <div className="px-4 py-3 border-b border-gray-800/80 bg-gray-900/95 backdrop-blur-sm">
         <div className="flex items-center space-x-3">
           <button
@@ -842,7 +902,6 @@ const ModernSupportWidget = () => {
         </div>
       </div>
 
-      {/* Messages */}
       <div 
         className="flex-1 overflow-y-auto p-4 bg-gradient-to-b from-gray-900 to-gray-900/95" 
         onDrop={handleFileDrop} 
@@ -858,7 +917,6 @@ const ModernSupportWidget = () => {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input Area */}
       <div className="border-t border-gray-800/80 bg-gray-900/95 backdrop-blur-sm p-4">
         {attachments.length > 0 && (
           <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
@@ -966,7 +1024,6 @@ const ModernSupportWidget = () => {
   return (
     <AnimatePresence>
       <div className="fixed bottom-4 right-4 z-50 flex flex-col items-end">
-        {/* Chat Button */}
         <motion.button
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}
@@ -994,7 +1051,6 @@ const ModernSupportWidget = () => {
           )}
         </motion.button>
 
-        {/* Chat Window */}
         {isOpen && (
           <motion.div
             initial={{ opacity: 0, y: 20, scale: 0.95 }}
@@ -1004,11 +1060,16 @@ const ModernSupportWidget = () => {
             className="bg-gray-900 rounded-2xl shadow-2xl w-[400px] h-[600px] 
               flex flex-col overflow-hidden border border-gray-800"
           >
-            {/* Header */}
             <div className="bg-gradient-to-r from-indigo-600 to-blue-600 
-              text-white px-6 py-4 flex items-center justify-between">
+              text-white px-6 py-4 flex items-center justify-between 
+              backdrop-blur-lg shadow-lg">
               <div className="flex items-center space-x-3">
-                <MessageCircle className="h-6 w-6" />
+                <motion.div
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+                >
+                  <MessageCircle className="h-6 w-6" />
+                </motion.div>
                 <h3 className="font-semibold text-lg">Support</h3>
               </div>
               <button 
@@ -1026,14 +1087,12 @@ const ModernSupportWidget = () => {
               </button>
             </div>
 
-            {/* Content Area */}
             <div className="flex-1 overflow-hidden">
               <AnimatePresence mode="wait">
                 {renderContent()}
               </AnimatePresence>
             </div>
 
-            {/* Loading Overlay */}
             {loading && (
               <div className="absolute inset-0 bg-black/50 backdrop-blur-sm 
                 flex items-center justify-center">
@@ -1054,3 +1113,5 @@ const ModernSupportWidget = () => {
 };
 
 export default ModernSupportWidget;
+
+              

@@ -41,7 +41,7 @@ const io = new Server(httpServer, {
 // Middleware
 // In server/index.js
 app.use(cors({
-  origin: ['http://localhost:3002', 'https://nayaplay.co', 'https://www.nayaplay.co'],
+  origin: ['http://localhost:3002', 'https://nayaplay.co', 'https://www.nayaplay.co', 'https://dev.d3gbazqn8zu3vg.amplifyapp.com'],
   methods: ['GET', 'POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type'],
   credentials: true,

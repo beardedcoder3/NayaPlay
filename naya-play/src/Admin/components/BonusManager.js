@@ -22,7 +22,9 @@ import {
   updateDoc,
   doc,
   Timestamp,
-  onSnapshot
+  onSnapshot,
+  setDoc,
+  getDoc
 } from 'firebase/firestore';
 import { db } from '../../firebase';
 
@@ -56,12 +58,33 @@ const AdminBonusManager = () => {
     expiryDate: '',
     maxRedemptions: ''
   });
+  const [welcomeBonus, setWelcomeBonus] = useState({
+    code: '',
+    amount: '',
+    isActive: true
+  });
   const [activeBonuses, setActiveBonuses] = useState([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    const unsubscribers = [];
+
+    // Fetch welcome bonus
+    const welcomeUnsubscribe = onSnapshot(doc(db, 'welcomeBonus', 'current'), (doc) => {
+      if (doc.exists()) {
+        const data = doc.data();
+        setWelcomeBonus({
+          code: data.code || '',
+          amount: data.perUserAmount || '',
+          isActive: data.isActive ?? true
+        });
+      }
+    });
+    unsubscribers.push(welcomeUnsubscribe);
+
+    // Fetch bonus codes
     const bonusesRef = collection(db, 'bonusCodes');
-    const unsubscribe = onSnapshot(bonusesRef, (snapshot) => {
+    const bonusUnsubscribe = onSnapshot(bonusesRef, (snapshot) => {
       const bonuses = [];
       snapshot.forEach(doc => {
         const data = doc.data();
@@ -74,9 +97,28 @@ const AdminBonusManager = () => {
       });
       setActiveBonuses(bonuses);
     });
+    unsubscribers.push(bonusUnsubscribe);
   
-    return () => unsubscribe();
+    return () => unsubscribers.forEach(unsub => unsub());
   }, []);
+
+  const updateWelcomeBonus = async () => {
+    try {
+      setLoading(true);
+      await setDoc(doc(db, 'welcomeBonus', 'current'), {
+        code: welcomeBonus.code,
+        perUserAmount: Number(welcomeBonus.amount),
+        isActive: welcomeBonus.isActive,
+        updatedAt: Timestamp.now()
+      });
+      alert('Welcome bonus updated successfully!');
+    } catch (error) {
+      console.error('Error updating welcome bonus:', error);
+      alert('Error updating welcome bonus');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const generateRandomCode = () => {
     const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -158,6 +200,64 @@ const AdminBonusManager = () => {
 
   return (
     <div className="space-y-6">
+      {/* Welcome Bonus Section */}
+      <div className="bg-[#1a1b1e] rounded-2xl border border-white/5 p-6">
+        <div className="flex items-center space-x-3 mb-6">
+          <div className="p-2 rounded-xl bg-purple-500/10">
+            <Gift className="text-purple-400" size={24} />
+          </div>
+          <h2 className="text-xl font-bold text-white">Welcome Bonus Settings</h2>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <InputField
+            label="Welcome Code"
+            type="text"
+            value={welcomeBonus.code}
+            onChange={(e) => setWelcomeBonus(prev => ({ ...prev, code: e.target.value }))}
+            placeholder="Enter welcome code"
+            icon={Gift}
+          />
+          
+          <InputField
+            label="Amount"
+            type="number"
+            value={welcomeBonus.amount}
+            onChange={(e) => setWelcomeBonus(prev => ({ ...prev, amount: e.target.value }))}
+            placeholder="Enter amount"
+            icon={DollarSign}
+          />
+          
+          <div className="flex items-center space-x-3">
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={welcomeBonus.isActive}
+                onChange={(e) => setWelcomeBonus(prev => ({ ...prev, isActive: e.target.checked }))}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer 
+                peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] 
+                after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full 
+                after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+            </label>
+            <span className="text-sm text-gray-400">Active</span>
+          </div>
+          
+          <button
+            onClick={updateWelcomeBonus}
+            disabled={loading}
+            className="w-full md:w-auto px-6 py-3 bg-purple-500 hover:bg-purple-600 
+              text-white rounded-xl font-medium transition-all duration-300 
+              disabled:opacity-50 disabled:cursor-not-allowed
+              flex items-center justify-center space-x-2"
+          >
+            <Sparkles size={18} />
+            <span>{loading ? 'Updating...' : 'Update Welcome Bonus'}</span>
+          </button>
+        </div>
+      </div>
+
       {/* Create Bonus Section */}
       <div className="bg-[#1a1b1e] rounded-2xl border border-white/5 p-6">
         <div className="flex items-center space-x-3 mb-6">

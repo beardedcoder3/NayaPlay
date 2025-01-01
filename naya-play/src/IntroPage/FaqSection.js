@@ -1,94 +1,87 @@
 import React, { useState } from 'react';
-import { ChevronDown, ArrowRight } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 
-const FAQItem = ({ question, answer }) => {
-  const [isOpen, setIsOpen] = useState(false);
-
+const FAQItem = ({ question, answer, isOpen, onToggle }) => {
   return (
-    <div className="border-b border-white/10">
+    <div className="rounded-xl bg-white/5 overflow-hidden mb-4">
       <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-full py-5 flex items-center justify-between text-white hover:text-white/90 transition-colors duration-200"
+        onClick={onToggle}
+        className="w-full px-6 py-4 flex items-center justify-between text-white hover:text-white/90 transition-colors duration-200"
       >
-        <span className="text-left font-medium text-lg">{question}</span>
-        <div className={`w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center
-          transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}>
-          <ChevronDown size={18} />
-        </div>
+        <span className="text-left font-medium">{question}</span>
+        <ChevronDown 
+          size={20} 
+          className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+        />
       </button>
-      <div
-        className={`overflow-hidden transition-all duration-200 ease-in-out ${
-          isOpen ? 'max-h-48 opacity-100 pb-5' : 'max-h-0 opacity-0'
-        }`}
-      >
-        <p className="text-white/60 leading-relaxed">{answer}</p>
-      </div>
+      {isOpen && (
+        <div className="px-6 pb-4">
+          <p className="text-gray-400 leading-relaxed">{answer}</p>
+        </div>
+      )}
     </div>
   );
 };
 
 const FAQSection = () => {
+  const [openIndex, setOpenIndex] = useState(0);
+  
   const faqs = [
     {
-      question: "How do I make a deposit?",
-      answer: "You can make a deposit through our secure payment methods, including credit card, PayPal, and bank transfer. All transactions are protected with advanced encryption."
+      question: "Who is Stake?",
+      answer: "Leading the online gambling industry since 2017, Stake.com offers a wide variety of online casino and sports betting options, operating globally in 15 different languages. With a reputable and secure platform, Stake Casino is home to worldwide local currencies and crypto betting options for online slot games, Stake Originals and live casino games. Stake Sportsbook offers unbeatable odds on all major sporting events including a range of eSport leagues."
     },
     {
-      question: "What are the withdrawal options?",
-      answer: "We offer multiple withdrawal options including bank transfer, crypto, and e-wallets. Most withdrawals are processed within 24 hours of request."
+      question: "Is Stake licensed?",
+      answer: "Stake operates under a valid gaming license and follows strict regulatory requirements to ensure fair and secure gaming operations."
     },
     {
-      question: "How do I verify my account?",
-      answer: "Account verification requires a valid government ID and proof of address. Upload these documents in your account settings for quick verification."
+      question: "Is betting on Stake safe?",
+      answer: "Yes, Stake employs industry-leading security measures and encryption to protect all user data and transactions."
     },
     {
-      question: "What are the betting limits?",
-      answer: "Betting limits vary by game and your account level. VIP members enjoy higher limits. Check individual games for specific limit information."
+      question: "What currencies can I bet with?",
+      answer: "Stake supports multiple cryptocurrencies and local currencies for betting and transactions."
     },
     {
-      question: "Is my data secure?",
-      answer: "Yes, we use industry-standard encryption and security measures to protect your personal and financial information. Our platform is regularly audited for security."
+      question: "What types of casino games can I play?",
+      answer: "Stake offers a wide variety of casino games including slots, table games, live dealer games, and exclusive Stake Originals."
+    },
+    {
+      question: "What sports can I bet on?",
+      answer: "You can bet on all major sports including football, basketball, tennis, and esports competitions."
+    },
+    {
+      question: "How do I watch live streams?",
+      answer: "Live streams are available for select events directly through the Stake platform for registered users."
     }
   ];
 
   return (
-    <section className="bg-slate-900 py-24">
-      <div className="max-w-7xl mx-auto px-4">
-        <div className="grid lg:grid-cols-2 gap-16 items-start">
-          {/* Left Column - Text and Button */}
-          <div className="lg:sticky lg:top-24">
-            <div className="max-w-md space-y-6">
-              <h2 className="text-3xl font-medium text-white">
-                Have questions?
-              </h2>
-              <p className="text-lg text-white/60">
-                Find quick answers to common questions, or reach out to our support team for personalized assistance.
-              </p>
-              <button className="group inline-flex items-center px-6 py-3 
-                bg-white/5 hover:bg-white/10 rounded-xl text-white font-medium
-                border border-white/10 hover:border-white/20
-                transition-all duration-200">
-                <span>View full guides</span>
-                <ArrowRight 
-                  size={18}
-                  className="ml-2 transition-transform duration-200 group-hover:translate-x-1" 
-                />
-              </button>
-            </div>
-          </div>
+    <section className="bg-slate-900 py-16">
+      <div className="max-w-3xl mx-auto px-4">
+        {/* Top section */}
+        <div className="mb-12">
+          <h2 className="text-4xl font-bold text-white mb-8">
+            Still have questions?
+          </h2>
+          <button className="px-6 py-3 bg-blue-600 text-white font-medium rounded-lg 
+            hover:bg-blue-700 transition-colors duration-200">
+            Read our guides
+          </button>
+        </div>
 
-          {/* Right Column - FAQs */}
-          <div className="bg-white/5 rounded-xl p-6 border border-white/10">
-            <div className="divide-y divide-white/10">
-              {faqs.map((faq, index) => (
-                <FAQItem
-                  key={index}
-                  question={faq.question}
-                  answer={faq.answer}
-                />
-              ))}
-            </div>
-          </div>
+        {/* FAQ Items */}
+        <div className="space-y-2">
+          {faqs.map((faq, index) => (
+            <FAQItem
+              key={index}
+              question={faq.question}
+              answer={faq.answer}
+              isOpen={index === openIndex}
+              onToggle={() => setOpenIndex(index === openIndex ? null : index)}
+            />
+          ))}
         </div>
       </div>
     </section>

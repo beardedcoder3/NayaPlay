@@ -1,10 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Wallet, DollarSign, Bitcoin, Gift, UserCheck, Building, CreditCard } from 'lucide-react';
-import { useBalance } from '../IntroPage/BalanceContext';
+import { Wallet, DollarSign, Bitcoin, Gift, UserCheck } from 'lucide-react';
 import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 
-// TabButton Component
 const TabButton = ({ name, icon: Icon, isActive, onClick }) => (
   <button
     onClick={onClick}
@@ -19,7 +17,6 @@ const TabButton = ({ name, icon: Icon, isActive, onClick }) => (
   </button>
 );
 
-// PaymentTypeButton Component
 const PaymentTypeButton = ({ type, icon: Icon, isActive, onClick }) => (
   <button
     onClick={onClick}
@@ -34,7 +31,6 @@ const PaymentTypeButton = ({ type, icon: Icon, isActive, onClick }) => (
   </button>
 );
 
-// TransactionRow Component
 const TransactionRow = ({ transaction }) => {
   const getStatusStyle = (status) => {
     switch (status?.toLowerCase()) {
@@ -53,28 +49,26 @@ const TransactionRow = ({ transaction }) => {
   };
 
   const getAmountDisplay = () => {
-    let prefix = '';
+    let prefix = '+';
     const isReceived = transaction.userId === auth.currentUser.uid;
   
     if (transaction.type === 'agent_transfer' || transaction.type === 'user_transfer') {
       prefix = isReceived ? '+' : '-';
     } else if (transaction.type === 'withdrawal') {
       prefix = '-';
-    } else if (transaction.type === 'deposit') {
-      prefix = '+';
     }
   
-    const amount = parseFloat(transaction.amount); // Convert to a number
-    const displayAmount = !isNaN(amount) ? amount.toFixed(2) : '0.00'; // Default to '0.00' for invalid values
+    const amount = parseFloat(transaction.amount);
+    const displayAmount = !isNaN(amount) ? amount.toFixed(2) : '0.00';
   
     return `${prefix}$${displayAmount}`;
   };
-  
 
   const getMethodDisplay = () => {
     if (transaction.type === 'agent_transfer' || transaction.type === 'user_transfer') {
       return `Agent: ${transaction.agentUsername || 'Unknown'}`;
     }
+  
     return transaction.method || transaction.type;
   };
 
@@ -92,24 +86,23 @@ const TransactionRow = ({ transaction }) => {
         </p>
       </div>
       <div className="flex items-center space-x-2 text-gray-300">
-        <UserCheck size={16} className="text-gray-400" />
+        <Gift size={16} className="text-gray-400" />
         <span>{getMethodDisplay()}</span>
       </div>
       <div>
         <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusStyle(transaction.status)}`}>
-          {transaction.status || 'Pending'}
+          {transaction.status || 'Completed'}
         </span>
       </div>
       <div className="text-gray-400 text-sm">
-        {transaction.timestamp?.toDate().toLocaleString() || 
-         transaction.createdAt?.toDate().toLocaleString()}
+        {transaction.timestamp?.toDate().toLocaleString()}
       </div>
     </div>
   );
 };
 
 const TransactionsPage = () => {
-  const [activeTab, setActiveTab] = useState('deposits');
+  const [activeTab, setActiveTab] = useState('others');
   const [paymentType, setPaymentType] = useState('crypto');
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -136,7 +129,31 @@ const TransactionsPage = () => {
     });
     unsubscribers.push(unsubTransactions);
 
-    // Agent transactions where user is recipient
+    // Bonus redemptions
+    const bonusQuery = query(
+      collection(db, 'bonusRedemptions'),
+      where('userId', '==', auth.currentUser.uid),
+      orderBy('timestamp', 'desc')
+    );
+
+    const unsubBonus = onSnapshot(bonusQuery, (snapshot) => {
+      const bonusTransactions = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          type: 'bonus_redeem',
+          status: 'Completed',
+          amount: data.amount,
+          code: data.code,
+          timestamp: data.timestamp,
+          userId: data.userId
+        };
+      });
+      updateTransactions('bonus', bonusTransactions);
+    });
+    unsubscribers.push(unsubBonus);
+
+    // Agent transactions
     const agentTransactionsQuery = query(
       collection(db, 'agentTransactions'),
       where('userId', '==', auth.currentUser.uid),
@@ -153,7 +170,6 @@ const TransactionsPage = () => {
     });
     unsubscribers.push(unsubAgentReceived);
 
-    // Agent transactions where user is sender (if user is an agent)
     const agentSentQuery = query(
       collection(db, 'agentTransactions'),
       where('agentId', '==', auth.currentUser.uid),
@@ -172,18 +188,20 @@ const TransactionsPage = () => {
 
     const updateTransactions = (type, newTransactions) => {
       setTransactions(prev => {
-        // Remove old transactions of the same type
-        const filtered = prev.filter(t => {
-          if (type === 'regular') return t.type === 'agent_transfer';
-          if (type === 'agentReceived') return !t.isReceived || t.type !== 'agent_transfer';
-          if (type === 'agentSent') return t.isReceived || t.type !== 'agent_transfer';
-          return true;
-        });
+        let filtered = [];
+        if (type === 'bonus') {
+          filtered = prev.filter(t => t.type !== 'bonus_redeem');
+        } else if (type === 'regular') {
+          filtered = prev.filter(t => t.type !== 'deposit' && t.type !== 'withdrawal');
+        } else if (type === 'agentReceived') {
+          filtered = prev.filter(t => !t.isReceived || t.type !== 'agent_transfer');
+        } else if (type === 'agentSent') {
+          filtered = prev.filter(t => t.isReceived || t.type !== 'agent_transfer');
+        }
 
-        // Combine and sort
         return [...filtered, ...newTransactions].sort((a, b) => {
-          const dateA = (a.createdAt || a.timestamp)?.toDate() || new Date(0);
-          const dateB = (b.createdAt || b.timestamp)?.toDate() || new Date(0);
+          const dateA = (a.timestamp || a.createdAt)?.toDate() || new Date(0);
+          const dateB = (b.timestamp || b.createdAt)?.toDate() || new Date(0);
           return dateB - dateA;
         });
       });
@@ -199,16 +217,16 @@ const TransactionsPage = () => {
     if (activeTab === 'agents') {
       return transaction.type === 'agent_transfer' || transaction.type === 'user_transfer';
     }
-    
     if (activeTab === 'deposits') {
       return transaction.type === 'deposit';
     }
-    
     if (activeTab === 'withdrawals') {
       return transaction.type === 'withdrawal';
     }
-    
-    return !['deposit', 'withdrawal', 'agent_transfer', 'user_transfer'].includes(transaction.type);
+    if (activeTab === 'others') {
+      return transaction.type === 'bonus_redeem';
+    }
+    return false;
   });
 
   return (
@@ -226,6 +244,12 @@ const TransactionsPage = () => {
           <div className="p-4 border-b border-gray-700/50">
             <div className="flex space-x-4">
               <TabButton 
+                name="Others" 
+                icon={Gift} 
+                isActive={activeTab === 'others'} 
+                onClick={() => setActiveTab('others')}
+              />
+              <TabButton 
                 name="Deposits" 
                 icon={Wallet} 
                 isActive={activeTab === 'deposits'} 
@@ -242,12 +266,6 @@ const TransactionsPage = () => {
                 icon={UserCheck} 
                 isActive={activeTab === 'agents'} 
                 onClick={() => setActiveTab('agents')}
-              />
-              <TabButton 
-                name="Others" 
-                icon={Gift} 
-                isActive={activeTab === 'others'} 
-                onClick={() => setActiveTab('others')}
               />
             </div>
           </div>
@@ -274,9 +292,7 @@ const TransactionsPage = () => {
           <div className="divide-y divide-gray-700/50">
             <div className="grid grid-cols-4 gap-4 py-3 px-6 bg-gray-800/50">
               <div className="text-sm font-medium text-gray-400">Amount</div>
-              <div className="text-sm font-medium text-gray-400">
-                {activeTab === 'agents' ? 'Agent' : 'Method'}
-              </div>
+              <div className="text-sm font-medium text-gray-400">Method</div>
               <div className="text-sm font-medium text-gray-400">Status</div>
               <div className="text-sm font-medium text-gray-400">Date</div>
             </div>

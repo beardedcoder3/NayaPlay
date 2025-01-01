@@ -17,7 +17,7 @@ const SupportSection = () => {
     {
       icon: Globe,
       title: "Multiple Languages",
-      text: "Support in English, Spanish, Japanese, and more"
+      text: "Support in English, Urdu and more"
     },
     {
       icon: Clock,

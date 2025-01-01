@@ -52,6 +52,7 @@ import SupportAgentLogin from './LiveSupportSystem/SupportAgentLogin';
 import { useLocation } from 'react-router-dom';
 import VerificationRoute from './VerificationRoute';
 import DiceGame from './Games/Dice';
+import { ErrorProvider } from './Error/ErrorContext';
 
 const Layout = ({ children }) => {
   const { isExpanded } = useSidebar();
@@ -61,7 +62,7 @@ const Layout = ({ children }) => {
     <>
       <Sidebar />
       <div className={`
-        transition-all duration-300 ease-in-out
+        transition-all duration-100 ease-in-out
         ${isExpanded ? 'ml-64' : 'ml-20'}
       `}>
         <NavBar />
@@ -366,6 +367,7 @@ function App() {
   }
 
   return (
+    <ErrorProvider>
     <NotificationProvider>
       <AdminProvider>
         <ChatProvider>
@@ -381,6 +383,7 @@ function App() {
         </ChatProvider>
       </AdminProvider>
     </NotificationProvider>
+    </ErrorProvider>
   );
 }
 

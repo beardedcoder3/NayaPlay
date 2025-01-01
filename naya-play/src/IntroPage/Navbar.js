@@ -19,7 +19,8 @@ import checkVerificationStatus from "../Auth/useAuth"
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import debounce from 'lodash/debounce';
 import { Calendar, Phone, Lock, EyeOff, Eye } from 'lucide-react';
-
+import { useError } from '../Error/ErrorContext';
+import { ErrorProvider } from '../Error/ErrorContext';
 
 // GameSearch Component
 const GameSearch = ({ isOpen, onClose }) => {
@@ -27,6 +28,7 @@ const GameSearch = ({ isOpen, onClose }) => {
   const [searchResults, setSearchResults] = useState([]);
   const searchRef = useRef(null);
   const navigate = useNavigate();
+ 
 
   const GAME_ROUTES = {
     "Cyberpunk 2077": "/mines",
@@ -184,7 +186,8 @@ const VerificationModal = ({ email, onClose }) => {
 // Register Modal Component
 
 // Register Modal Component
- export const RegisterModal = ({ onSubmit, onClose }) => {
+export const RegisterModal = ({ onSubmit, onClose }) => {
+  const { showError } = useError(); // Add this line at the top with other hooks
   const [formData, setFormData] = useState({
     email: '',
     username: '',
@@ -193,7 +196,6 @@ const VerificationModal = ({ email, onClose }) => {
     dateOfBirth: '',
     phone: ''
   });
-  
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [usernameStatus, setUsernameStatus] = useState({
@@ -289,13 +291,13 @@ const VerificationModal = ({ email, onClose }) => {
   
       // Validation checks
       if (formData.password !== formData.confirmPassword) {
-        setError('Passwords do not match');
+        showError('Passwords do not match', 'Password Error');
         setLoading(false);
         return;
       }
   
       if (passwordStrength.score < 3) {
-        setError('Please choose a stronger password');
+        showError('Please choose a stronger password', 'Weak Password');
         setLoading(false);
         return;
       }
@@ -304,7 +306,15 @@ const VerificationModal = ({ email, onClose }) => {
         const { confirmPassword, ...submitData } = formData;
         await onSubmit(submitData);
       } catch (error) {
-        setError(error.message);
+        if (error.code === 'auth/email-already-in-use') {
+          showError('This email is already registered. Please try logging in instead.', 'Email In Use');
+        } else if (error.code === 'auth/invalid-email') {
+          showError('Please enter a valid email address.', 'Invalid Email');
+        } else if (error.code === 'auth/weak-password') {
+          showError('Password should be at least 6 characters long.', 'Weak Password');
+        } else {
+          showError(error.message || 'Registration failed. Please try again.', 'Registration Error');
+        }
       } finally {
         setLoading(false);
       }
@@ -677,6 +687,7 @@ const NavBar = () => {
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isWalletOpen, setIsWalletOpen] = useState(false);
+  const { showError } = useError();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -729,7 +740,6 @@ const NavBar = () => {
         status: 'active'
       });
   
-      // Use your custom verification endpoint instead of Firebase's
       const response = await fetch(`${process.env.REACT_APP_API_URL}/api/generate-verification`, {
         method: 'POST',
         headers: {
@@ -752,13 +762,37 @@ const NavBar = () => {
       
       navigate('/verify-email');
     } catch (error) {
+      console.error('Registration error:', error);
+      
+      // Show specific error messages
       if (error.code === 'auth/email-already-in-use') {
-        throw new Error('Email already registered. Please login instead.');
+        showError(
+          'This email is already registered. Please try logging in instead.',
+          'Email In Use'
+        );
+      } else if (error.code === 'auth/invalid-email') {
+        showError(
+          'Please enter a valid email address.',
+          'Invalid Email'
+        );
+      } else if (error.code === 'auth/weak-password') {
+        showError(
+          'Password should be at least 6 characters long.',
+          'Weak Password'
+        );
+      } else if (error.message.includes('verification')) {
+        showError(
+          error.message,
+          'Verification Error'
+        );
+      } else {
+        showError(
+          'An unexpected error occurred. Please try again.',
+          'Registration Error'
+        );
       }
-      throw new Error('Registration failed. Please try again.');
     }
   };
-  
 
   
   const handleSetupWallet = async () => {

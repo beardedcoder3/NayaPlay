@@ -1,3 +1,4 @@
+// In ProfileDropdown.jsx
 import React, { useState } from 'react';
 import { 
   Wallet, Crown, LineChart, History, DollarSign, 
@@ -9,12 +10,16 @@ import { auth } from "../firebase";
 import WalletModal from './WalletModal';
 import VipModal from './VipModal';
 import StatisticsModal from './StatisticsModal';
+import ModernSupportWidget from '../LiveSupportSystem/LiveSupportWidget';
 
 const ProfileDropdown = ({ isOpen, onClose }) => {
   const [isWalletOpen, setIsWalletOpen] = useState(false);
   const [isVipOpen, setIsVipOpen] = useState(false);
   const [isStatsOpen, setIsStatsOpen] = useState(false);
+  const [isSupportOpen, setIsSupportOpen] = useState(false);
   const navigate = useNavigate();
+
+  const currentUser = auth.currentUser;
 
   const menuItems = [
     { icon: Wallet, label: 'Wallet', action: () => setIsWalletOpen(true) },
@@ -23,7 +28,9 @@ const ProfileDropdown = ({ isOpen, onClose }) => {
     { icon: History, label: 'Transactions', route: '/transactions' },
     { icon: DollarSign, label: 'My Bets', route: '/my-bets' },
     { icon: Settings, label: 'Settings', route: '/settings' },
-    { icon: HeadphonesIcon, label: 'Live Support', route: '/support' },
+    
+    // Update the Live Support to use isSupportOpen state
+  
   ];
 
   const handleLogout = async () => {
@@ -37,6 +44,7 @@ const ProfileDropdown = ({ isOpen, onClose }) => {
 
   return (
     <>
+      {/* Dropdown Menu */}
       <div 
         className={`absolute right-0 top-16 mt-1 transition-all duration-300 w-56
           ${isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
@@ -82,9 +90,20 @@ const ProfileDropdown = ({ isOpen, onClose }) => {
         </div>
       </div>
 
+      {/* Modals */}
       <WalletModal isOpen={isWalletOpen} onClose={() => setIsWalletOpen(false)} />
       <VipModal isOpen={isVipOpen} onClose={() => setIsVipOpen(false)} />
-      <StatisticsModal isOpen={isStatsOpen} onClose={() => setIsStatsOpen(false)} />
+      <StatisticsModal 
+        userId={auth.currentUser?.uid}
+        isOpen={isStatsOpen} 
+        onClose={() => setIsStatsOpen(false)}
+      />
+      
+      {/* Support Widget with controlled open state */}
+      <ModernSupportWidget 
+  isOpen={isSupportOpen} 
+  onClose={() => setIsSupportOpen(false)}
+/>
     </>
   );
 };

@@ -12,6 +12,9 @@ import useAuth from '../Auth/useAuth';
 import { useBalance } from '../IntroPage/BalanceContext';
 import { useLiveBets } from '../IntroPage/LiveBetsContext';
 import { serverTimestamp } from 'firebase/firestore';
+import { useTrackPresence } from '../Lobby/useTrackPresence';
+
+
 // At the top of Crash.js
 const MemoizedPlaneAnimation = React.memo(PlaneAnimation);
 const MemoizedPlayersList = React.memo(PlayersList);
@@ -41,6 +44,9 @@ const CrashGame = () => {
   const [isProcessingBet, setIsProcessingBet] = useState(false);
   const { addBet } = useLiveBets();
   const [isInitializing, setIsInitializing] = useState(true);
+
+
+  useTrackPresence("crash");
 
   useEffect(() => {
     const initializeGame = async () => {

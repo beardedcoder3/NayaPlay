@@ -14,7 +14,7 @@ import {
   HeadphonesIcon,
   LogOut,
   MessageSquare,
-  X
+  Globe
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
@@ -24,142 +24,74 @@ import VipModal from './VipModal';
 import StatisticsModal from './StatisticsModal';
 import { useSidebar } from "../SidebarContext";
 
-// Coming Soon Modal with enhanced design
-const ComingSoonModal = ({ isOpen, onClose }) => {
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div 
-        className="absolute inset-0 bg-black/80 backdrop-blur-sm"
-        onClick={onClose}
-      />
-      
-      <div className="relative bg-gray-900 rounded-2xl shadow-2xl w-full max-w-sm m-4 animate-scale-in border border-gray-800">
-        <div className="p-8">
-          <button 
-            onClick={onClose}
-            className="absolute right-4 top-4 p-2 hover:bg-gray-800 rounded-full transition-colors"
-          >
-            <X size={20} className="text-gray-400 hover:text-gray-300" />
-          </button>
-          
-          <h3 className="text-2xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent mb-4">
-            Coming Soon
-          </h3>
-          <p className="text-gray-400">
-            We're working hard to bring this feature to you. Stay tuned for updates!
-          </p>
-          
-          <button
-            onClick={onClose}
-            className="mt-8 w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-3 rounded-xl font-medium hover:from-indigo-500 hover:to-purple-500 transition-all duration-200 transform hover:scale-[1.02]"
-          >
-            Got it
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// Enhanced Sidebar Item Component
+// SidebarItem Component
 const SidebarItem = ({ 
   icon: Icon, 
   text, 
   hasDropdown, 
   isOpen, 
   children, 
-  isActive, 
-  onClick, 
-  comingSoon, 
-  badge 
+  onClick,
+  isDropdownItem = false
 }) => {
   const { isExpanded } = useSidebar();
-  const [showTooltip, setShowTooltip] = useState(false);
 
   return (
-    <div 
-      className="relative group py-1"
-      onMouseEnter={() => !isExpanded && setShowTooltip(true)}
-      onMouseLeave={() => setShowTooltip(false)}
-    >
+    <div className="relative">
       <div 
         onClick={onClick}
         className={`
-          flex items-center px-4 py-3 cursor-pointer
-          transition-all duration-300 ease-out
-          hover:bg-gray-800/50 hover:backdrop-blur-sm
-          rounded-xl mx-2
-          ${isActive ? 'bg-indigo-500/10 text-indigo-300' : ''}
-          border border-transparent hover:border-gray-700/50
-          relative overflow-hidden group
-          ${comingSoon ? 'opacity-75' : ''}
-          animate-fade-in
+          flex items-center cursor-pointer
+          transition-all duration-200 ease-out
+          hover:bg-[#1a2730]
+          ${isOpen ? 'bg-[#1a2730]' : ''}
+          ${isDropdownItem ? 'pl-8 py-2' : 'px-6 py-2.5'}
+          ${isExpanded ? 'opacity-100' : 'opacity-80 hover:opacity-100'}
         `}
       >
-        <div className="min-w-[20px] flex items-center justify-center">
+        <div className={`
+          min-w-[24px] flex items-center justify-center
+          transition-transform duration-200 ease-out
+          ${!isExpanded && 'transform scale-110'}
+        `}>
           <Icon size={20} className={`
-            transition-colors duration-300
-            ${isActive ? 'text-indigo-400' : 'text-gray-400 group-hover:text-gray-200'}
+            transition-all duration-200
+            ${isOpen ? 'text-gray-200' : 'text-gray-400'}
           `} />
         </div>
         
         <div className={`
-          flex items-center justify-between
-          transition-all duration-300 ease-out
-          ${isExpanded ? 'w-[180px] ml-3 opacity-100' : 'w-0 opacity-0'}
+          flex items-center justify-between flex-1
+          transition-all duration-200 ease-out
+          ${isExpanded ? 'opacity-100 ml-3 translate-x-0' : 'opacity-0 -translate-x-5 overflow-hidden w-0'}
         `}>
           <span className={`
-            whitespace-nowrap font-medium
-            transition-colors duration-300
-            ${isActive ? 'text-gray-100' : 'text-gray-400 group-hover:text-gray-200'}
+            text-sm whitespace-nowrap
+            transition-colors duration-200
+            ${isOpen ? 'text-gray-200' : 'text-gray-400'}
           `}>
             {text}
           </span>
-          
-          {badge && (
-            <span className="ml-2 px-2.5 py-0.5 text-xs font-semibold bg-indigo-500/10 text-indigo-300 rounded-full">
-              {badge}
-            </span>
-          )}
           
           {hasDropdown && (
             <ChevronDown 
               size={16} 
               className={`
-                transition-transform duration-300
-                ${isOpen ? 'rotate-180 text-indigo-400' : 'text-gray-400'}
-                group-hover:text-gray-200 ml-2
+                transition-all duration-200 ease-out
+                ${isOpen ? 'rotate-180 text-gray-200' : 'text-gray-500'}
+                ml-2
               `} 
             />
           )}
         </div>
       </div>
 
-      {/* Enhanced Tooltip */}
-      {showTooltip && !isExpanded && (
-        <div className="absolute left-16 top-1/2 -translate-y-1/2 z-50 
-          bg-gray-800 text-gray-100 px-3 py-2 rounded-lg text-sm 
-          whitespace-nowrap border border-gray-700 shadow-xl animate-fade-in">
-          {text}
-          {comingSoon && (
-            <span className="ml-2 text-xs bg-indigo-500/10 text-indigo-300 px-1.5 py-0.5 rounded-full">
-              Soon
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* Enhanced Dropdown */}
-      {isExpanded && isOpen && (
-        <div className="mt-2 mx-2 overflow-hidden animate-scale-in">
-          <div className="
-            bg-gray-800/90 backdrop-blur-sm
-            rounded-xl border border-gray-700
-            shadow-xl
-            transition-all duration-300 ease-in-out
-          ">
+      {isExpanded && children && (
+        <div className={`
+          overflow-hidden transition-all duration-200 ease-out
+          ${isOpen ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'}
+        `}>
+          <div className="bg-[#1a2730]/50">
             {children}
           </div>
         </div>
@@ -175,7 +107,6 @@ const Sidebar = () => {
   const [isWalletOpen, setIsWalletOpen] = useState(false);
   const [isVipOpen, setIsVipOpen] = useState(false);
   const [isStatsOpen, setIsStatsOpen] = useState(false);
-  const [showFeatureDialog, setShowFeatureDialog] = useState(false);
   const navigate = useNavigate();
 
   const handleDropdown = (name) => {
@@ -191,10 +122,6 @@ const Sidebar = () => {
     }
   };
 
-  const handleComingSoonFeature = () => {
-    setShowFeatureDialog(true);
-  };
-
   const profileOptions = [
     { icon: Wallet, label: 'Wallet', action: () => setIsWalletOpen(true) },
     { icon: Crown, label: 'VIP', action: () => setIsVipOpen(true) },
@@ -203,57 +130,52 @@ const Sidebar = () => {
     { icon: DollarSign, label: 'My Bets', route: '/my-bets' },
     { icon: Settings, label: 'Settings', route: '/settings' },
     { icon: HeadphonesIcon, label: 'Live Support', route: '/support' },
-    { icon: LogOut, label: 'Logout', action: handleLogout, danger: true }
+    { icon: LogOut, label: 'Logout', action: handleLogout, className: 'text-red-400' }
   ];
 
   return (
     <>
-      <div className={`
-        fixed left-0 top-0 h-screen
-        transition-[width] duration-300 ease-in-out
-        ${isExpanded ? 'w-64' : 'w-20'}
-        flex flex-col
-        bg-gradient-to-b from-gray-900 via-gray-900 to-gray-900/95
-        backdrop-blur-xl
-        border-r border-gray-800/50
-        shadow-2xl shadow-black/20
-        z-50
-      `}>
-        {/* Enhanced Hamburger Menu */}
-        <div className="flex items-center p-5 border-b border-gray-800/50">
+      <div 
+        className={`
+          fixed left-0 top-0 h-screen
+          transition-all duration-200 ease-out
+          flex flex-col
+          bg-[#0f1923]
+          border-r border-white/5
+          z-50
+          ${isExpanded ? 'w-64 translate-x-0' : 'w-20 translate-x-0'}
+        `}
+      >
+        <div className="flex items-center h-16 px-6 border-b border-white/5">
           <button
             onClick={() => setIsExpanded(!isExpanded)}
             className={`
-              w-10 h-10 flex items-center justify-center
-              rounded-xl
-              transition-all duration-300 ease-in-out
-              hover:bg-gray-800/50
-              border border-transparent hover:border-gray-700
-              group
+              w-8 h-8 flex items-center justify-center
+              text-gray-400 hover:text-gray-300
+              transition-transform duration-200 ease-out
+              ${!isExpanded && 'transform hover:scale-110'}
             `}
           >
-            <Menu 
-              size={20} 
-              className={`
-                text-gray-400 group-hover:text-gray-200
-                transition-all duration-300
-                ${isExpanded ? 'rotate-180' : 'rotate-0'}
-              `} 
-            />
+            <Menu size={24} className={`
+              transition-transform duration-200 ease-out
+              ${!isExpanded ? 'transform rotate-0' : 'transform rotate-180'}
+            `} />
           </button>
         </div>
 
-        {/* Menu Items Container */}
-        <div className="flex-1 py-4 flex flex-col overflow-y-auto scrollbar-none">
+        <div className="flex-1 py-2 flex flex-col overflow-y-auto scrollbar-none">
           <SidebarItem
             icon={User}
             text="Profile"
             hasDropdown={true}
             isOpen={activeDropdown === 'profile'}
-            isActive={activeDropdown === 'profile'}
             onClick={() => handleDropdown('profile')}
           >
-            <div className="py-2">
+            <div className={`
+              py-1
+              transition-all duration-200 ease-out
+              ${activeDropdown === 'profile' ? 'opacity-100' : 'opacity-0'}
+            `}>
               {profileOptions.map((option, index) => (
                 <button
                   key={index}
@@ -262,16 +184,15 @@ const Sidebar = () => {
                     if (option.route) navigate(option.route);
                   }}
                   className={`
-                    w-full px-4 py-2.5 text-left
-                    transition-all duration-200
+                    w-full px-4 py-2.5 text-left text-sm
                     flex items-center space-x-3
-                    hover:bg-gray-700/30
-                    ${option.danger ? 'text-red-400 hover:text-red-300' : 'text-gray-400 hover:text-gray-200'}
-                    group
+                    transition-all duration-200 ease-out
+                    hover:bg-[#1a2730]
+                    ${option.className || 'text-gray-400 hover:text-gray-300'}
                   `}
                 >
-                  <option.icon size={18} className="group-hover:scale-110 transition-transform duration-200" />
-                  <span className="font-medium">{option.label}</span>
+                  <option.icon size={18} className="transition-transform duration-200 ease-out hover:scale-110" />
+                  <span>{option.label}</span>
                 </button>
               ))}
             </div>
@@ -280,9 +201,7 @@ const Sidebar = () => {
           <SidebarItem
             icon={Gift}
             text="Promotions"
-            badge="Soon"
-            comingSoon={true}
-            onClick={handleComingSoonFeature}
+            onClick={() => navigate('/promotions')}
           />
 
           <SidebarItem
@@ -294,34 +213,35 @@ const Sidebar = () => {
           <SidebarItem
             icon={Newspaper}
             text="Blog"
-            badge="Soon"
-            comingSoon={true}
-            onClick={handleComingSoonFeature}
+            onClick={() => navigate('/blog')}
           />
 
           <SidebarItem
             icon={MessageSquare}
             text="Forum"
-            badge="Soon"
-            comingSoon={true}
-            onClick={handleComingSoonFeature}
+            onClick={() => navigate('/forum')}
           />
 
-          <SidebarItem
-            icon={HeadphonesIcon}
-            text="Live Support"
-            onClick={() => navigate('/support')}
-          />
+       
+
+<SidebarItem
+  icon={HeadphonesIcon}
+  text="Live Support"
+  onClick={() => {
+    const event = new Event('openSupportWidget');
+    document.dispatchEvent(event);
+  }}
+/>
         </div>
       </div>
 
       {/* Modals */}
       <WalletModal isOpen={isWalletOpen} onClose={() => setIsWalletOpen(false)} />
       <VipModal isOpen={isVipOpen} onClose={() => setIsVipOpen(false)} />
-      <StatisticsModal isOpen={isStatsOpen} onClose={() => setIsStatsOpen(false)} />
-      <ComingSoonModal 
-        isOpen={showFeatureDialog} 
-        onClose={() => setShowFeatureDialog(false)} 
+      <StatisticsModal 
+        isOpen={isStatsOpen} 
+        onClose={() => setIsStatsOpen(false)} 
+        userId={auth.currentUser?.uid}
       />
     </>
   );

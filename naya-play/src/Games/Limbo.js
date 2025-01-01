@@ -4,6 +4,7 @@ import { useBalance } from '../IntroPage/BalanceContext';
 import { useLiveBets } from '../IntroPage/LiveBetsContext';
 import { auth, db } from '../firebase';
 import { doc, addDoc, collection, updateDoc, increment, serverTimestamp } from 'firebase/firestore';
+import { useTrackPresence } from '../Lobby/useTrackPresence';
 
 // Cryptographically secure random number generation
 const generateRandom = () => {
@@ -83,6 +84,8 @@ const MultiplierGame = () => {
   const [currentMultiplier, setCurrentMultiplier] = useState(1);
   const [gameState, setGameState] = useState('idle');
   const [recentResults, setRecentResults] = useState([]);
+
+  useTrackPresence("limbo");
 
   const calculateExpectedProfit = () => {
     const bet = parseFloat(betAmount) || 0;

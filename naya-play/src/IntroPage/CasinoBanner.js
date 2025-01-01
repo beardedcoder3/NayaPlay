@@ -1,19 +1,20 @@
 import React from 'react';
-import { Sparkles, Play, Trophy, Clock } from 'lucide-react';
+import { Sparkles, Play, Trophy, Clock, ArrowRight } from 'lucide-react';
 
-const FeatureItem = ({ icon: Icon, text, count }) => (
-  <div className="group cursor-pointer">
-    <div className="flex items-center space-x-3 bg-white/5 hover:bg-white/10 
-    backdrop-blur-sm rounded-xl p-4 transition-all duration-300
-    border border-white/5 hover:border-white/10">
-      <div className="p-2.5 rounded-lg bg-gradient-to-br from-blue-500/20 to-indigo-500/20">
-        <Icon size={22} className="text-blue-400" />
-      </div>
-      <div>
-        <span className="text-sm font-medium text-white/90 block">{text}</span>
-        {count && (
-          <span className="text-xs text-blue-400/90">{count}+ games</span>
-        )}
+const FeatureCard = ({ icon: Icon, title, description }) => (
+  <div className="relative group">
+    <div className="absolute inset-0 bg-gradient-to-r from-purple-500/20 to-pink-500/20 rounded-2xl 
+      blur-xl group-hover:blur-2xl transition-all duration-300 opacity-0 group-hover:opacity-100" />
+    <div className="relative bg-black/40 backdrop-blur-md rounded-2xl p-6 
+      border border-white/10 hover:border-white/20 transition-all duration-300">
+      <div className="flex items-start space-x-4">
+        <div className="p-3 rounded-xl bg-gradient-to-br from-purple-500/20 to-pink-500/20">
+          <Icon size={24} className="text-purple-400" />
+        </div>
+        <div>
+          <h3 className="text-white font-medium mb-2">{title}</h3>
+          <p className="text-white/60 text-sm leading-relaxed">{description}</p>
+        </div>
       </div>
     </div>
   </div>
@@ -21,105 +22,102 @@ const FeatureItem = ({ icon: Icon, text, count }) => (
 
 const CasinoBanner = () => {
   return (
-    <div className="relative w-full bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 overflow-hidden">
-      {/* Enhanced ambient lighting effects */}
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-0 left-1/4 w-[30rem] h-[30rem] bg-blue-500/10 rounded-full filter blur-[160px]" />
-        <div className="absolute bottom-0 right-1/4 w-[30rem] h-[30rem] bg-indigo-500/10 rounded-full filter blur-[160px]" />
+    <section className="relative bg-[#0A0118] py-20 overflow-hidden">
+      {/* Decorative elements */}
+      <div className="absolute inset-0">
+        <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-purple-500/10 rounded-full 
+          blur-3xl opacity-20 -translate-y-1/2 translate-x-1/2" />
+        <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-pink-500/10 rounded-full 
+          blur-3xl opacity-20 translate-y-1/2 -translate-x-1/2" />
       </div>
 
-      {/* Refined diagonal line decoration */}
-      <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute top-0 left-0 w-full h-full">
-          {[...Array(3)].map((_, i) => (
-            <div
-              key={i}
-              className="absolute h-px w-full bg-gradient-to-r from-transparent via-blue-500/10 to-transparent"
-              style={{
-                top: `${i * 33}%`,
-                transform: 'rotate(-35deg)',
-                left: '-50%',
-                width: '200%'
-              }}
-            />
-          ))}
-        </div>
-      </div>
-
-      {/* Content container */}
-      <div className="max-w-7xl mx-auto px-4 py-20 lg:py-24 relative">
-        <div className="grid lg:grid-cols-2 gap-16 items-center">
-          {/* Left content */}
-          <div className="space-y-10 relative z-10">
-            {/* Enhanced headline */}
-            <div className="space-y-5">
-              <h2 className="text-4xl lg:text-5xl font-bold leading-tight">
-                <span className="text-white">Elevate Your</span>
-                <br />
-                <span className="bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-400 bg-clip-text text-transparent">
-                  Gaming Journey
-                </span>
-              </h2>
-              <p className="text-lg text-slate-300 max-w-xl">
-                Step into a world of endless possibilities with carefully curated games designed for the ultimate entertainment experience.
-              </p>
-            </div>
-
-            {/* Refined feature grid */}
-            <div className="grid grid-cols-2 gap-4">
-              <FeatureItem icon={Sparkles} text="New Releases" count="250" />
-              <FeatureItem icon={Play} text="Live Casino" count="100" />
-              <FeatureItem icon={Trophy} text="Tournaments" count="50" />
-              <FeatureItem icon={Clock} text="24/7 Action" />
-            </div>
-
-            {/* Enhanced CTA Button */}
-            <button className="group px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 
-              rounded-xl font-bold text-lg
-              transition-all duration-300 
-              hover:from-blue-500 hover:to-indigo-500 active:from-blue-700 active:to-indigo-700
-              transform hover:scale-[1.02] active:scale-[0.98]
-              shadow-lg shadow-blue-500/20
-              border border-white/10 hover:border-white/20">
-              Explore Games Library
-              <span className="inline-block ml-2 transform group-hover:translate-x-1 transition-transform duration-200">
-                →
-              </span>
-            </button>
-          </div>
-
-          {/* Right content - Enhanced image container */}
-          <div className="relative lg:h-[600px] flex items-center justify-center">
-            <div className="relative w-full h-full">
-              {/* Game banner image with enhanced styling */}
+      <div className="max-w-7xl mx-auto px-4 relative">
+        <div className="flex flex-col lg:flex-row gap-16 items-center">
+          {/* Left content - Image showcase */}
+          <div className="lg:w-1/2 relative">
+            <div className="relative rounded-[2rem] overflow-hidden shadow-2xl">
               <img
-                src="https://c1.wallpaperflare.com/preview/659/106/422/casino-arcade-slot-machines-machines-gambling-risk.jpg"
-                alt="Casino Games"
-                className="object-cover w-full h-full rounded-2xl shadow-2xl 
-                border border-white/10 hover:border-white/20 transition-all duration-300"
+                src="https://img.freepik.com/premium-photo/charming-blonde-lady-bright-make-up-green-stylish-dress-jewelry-folded-her-hands-showing-two-aces-posing-sideways-red-studio-background-with-backlight-gambling-poker-casino-close-up_157927-1806.jpg"
+                alt="Casino Experience"
+                className="w-full aspect-[4/3] object-cover"
               />
+              <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-80" />
               
-              {/* Enhanced overlay gradient */}
-              <div className="absolute inset-0 rounded-2xl bg-gradient-to-t from-slate-900/90 via-slate-900/40 to-transparent" />
-              
-              {/* Enhanced stats overlay */}
+              {/* Stats overlay */}
               <div className="absolute bottom-0 left-0 right-0 p-8">
-                <div className="flex justify-between items-center text-sm font-medium">
-                  <div className="flex items-center space-x-2">
-                    <Trophy size={16} className="text-blue-400" />
-                    <span className="text-blue-400">2000+ Games</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Sparkles size={16} className="text-green-400" />
-                    <span className="text-green-400">97% Payout Rate</span>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-6">
+                    <div className="flex items-center space-x-2">
+                      <Trophy className="text-purple-400 h-5 w-5" />
+                      <span className="text-white text-sm font-medium">200+ Winners Daily</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Clock className="text-pink-400 h-5 w-5" />
+                      <span className="text-white text-sm font-medium">24/7 Live Games</span>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
+
+            {/* Floating card */}
+            <div className="absolute -bottom-8 -right-8 bg-black/60 backdrop-blur-xl p-4 rounded-2xl 
+              border border-white/10 shadow-xl">
+              <div className="flex items-center space-x-3">
+                <div className="p-2 rounded-lg bg-gradient-to-br from-purple-500/20 to-pink-500/20">
+                  <Sparkles className="text-purple-400 h-5 w-5" />
+                </div>
+                <div className="text-sm">
+                  <p className="text-white font-medium">New Games Added</p>
+                  <p className="text-white/60">Every week</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Right content */}
+          <div className="lg:w-1/2 space-y-10">
+            <div>
+              <h2 className="text-5xl font-bold mb-6">
+                <span className="text-white">Experience</span>
+                <br />
+                <span className="bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+                  Next-Gen Betting
+                </span>
+              </h2>
+              <p className="text-lg text-white/60 leading-relaxed">
+                Dive into a world of cutting-edge casino games with immersive gameplay 
+                and stunning visuals. Join thousands of players winning big every day.
+              </p>
+            </div>
+
+            {/* Feature grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <FeatureCard
+                icon={Play}
+                title="Live Dealers"
+                description="Experience real-time action with immersive gameplay"
+              />
+              <FeatureCard
+                icon={Trophy}
+                title="Daily Tournaments"
+                description="Compete for massive prize pools every day"
+              />
+            </div>
+
+            {/* CTA Button */}
+            <button className="group flex items-center space-x-3 px-8 py-4 
+              bg-gradient-to-r from-purple-500 to-pink-500
+              rounded-2xl text-white font-medium text-lg
+              transition-all duration-300 transform hover:scale-105
+              shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40">
+              <span>Start Playing Now</span>
+            
+            </button>
           </div>
         </div>
       </div>
-    </div>
+    </section>
   );
 };
 

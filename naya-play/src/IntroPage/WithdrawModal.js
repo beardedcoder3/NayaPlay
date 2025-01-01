@@ -25,8 +25,8 @@ const PAKISTANI_BANKS = [
 ];
 
 const MOBILE_WALLETS = [
-  { name: 'Easypaisa', value: 'easypaisa' },
-  { name: 'JazzCash', value: 'jazzcash' }
+  { name: '', value: '' },
+  { name: '', value: '' }
 ];
 const WithdrawalForm = ({ isOpen, onClose }) => {
   const [withdrawMethod, setWithdrawMethod] = useState('crypto');

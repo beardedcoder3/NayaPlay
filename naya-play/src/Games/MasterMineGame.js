@@ -4,6 +4,7 @@ import { useBalance } from '../IntroPage/BalanceContext';
 import { useLiveBets } from '../IntroPage/LiveBetsContext'; 
 import { auth, db } from '../firebase';
 import { doc, getDoc, addDoc, collection, increment, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { useTrackPresence } from '../Lobby/useTrackPresence';
 
 const getUserData = async () => {
   if (!auth.currentUser) return null;
@@ -123,6 +124,9 @@ const MinesGame = () => {
     setMultiplier(multiplier);
   };
 
+  useTrackPresence('mines');
+
+  
   const validateBet = () => {
     const betValue = parseFloat(betAmount);
     return betValue >= 0.10 && 
