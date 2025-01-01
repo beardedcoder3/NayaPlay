@@ -184,10 +184,8 @@ const VerificationModal = ({ email, onClose }) => {
   );
 };
 // Register Modal Component
-
-// Register Modal Component
 export const RegisterModal = ({ onSubmit, onClose }) => {
-  const { showError } = useError(); // Add this line at the top with other hooks
+  const { showError } = useError();
   const [formData, setFormData] = useState({
     email: '',
     username: '',
@@ -234,221 +232,224 @@ export const RegisterModal = ({ onSubmit, onClose }) => {
     };
   };
 
-    // Username availability check
-    const checkUsername = debounce(async (username) => {
-      if (!username || username.length < 3) {
-        setUsernameStatus({
-          isChecking: false,
-          isAvailable: null,
-          message: username ? 'Username must be at least 3 characters' : ''
-        });
-        return;
+  // Username availability check
+  const checkUsername = debounce(async (username) => {
+    if (!username || username.length < 3) {
+      setUsernameStatus({
+        isChecking: false,
+        isAvailable: null,
+        message: username ? 'Username must be at least 3 characters' : ''
+      });
+      return;
+    }
+
+    setUsernameStatus(prev => ({ ...prev, isChecking: true }));
+
+    try {
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, where('username', '==', username.toLowerCase()));
+      const querySnapshot = await getDocs(q);
+
+      setUsernameStatus({
+        isChecking: false,
+        isAvailable: querySnapshot.empty,
+        message: querySnapshot.empty ? 'Username is available' : 'Username is already taken'
+      });
+    } catch (error) {
+      setUsernameStatus({
+        isChecking: false,
+        isAvailable: false,
+        message: 'Error checking username availability'
+      });
+    }
+  }, 500);
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+
+    if (name === 'username') {
+      checkUsername(value);
+    }
+
+    if (name === 'password') {
+      setPasswordStrength(validatePassword(value));
+    }
+
+    setError('');
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+
+    // Validation checks
+    if (formData.password !== formData.confirmPassword) {
+      showError('Passwords do not match', 'Password Error');
+      setLoading(false);
+      return;
+    }
+
+    if (passwordStrength.score < 3) {
+      showError('Please choose a stronger password', 'Weak Password');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      localStorage.setItem('registrationComplete', 'true'); // Add this line
+      const { confirmPassword, ...submitData } = formData;
+      await onSubmit(submitData);
+    } catch (error) {
+      localStorage.removeItem('registrationComplete'); // Add this line
+      if (error.code === 'auth/email-already-in-use') {
+        showError('This email is already registered. Please try logging in instead.', 'Email In Use');
+      } else if (error.code === 'auth/invalid-email') {
+        showError('Please enter a valid email address.', 'Invalid Email');
+      } else if (error.code === 'auth/weak-password') {
+        showError('Password should be at least 6 characters long.', 'Weak Password');
+      } else {
+        showError(error.message || 'Registration failed. Please try again.', 'Registration Error');
       }
-  
-      setUsernameStatus(prev => ({ ...prev, isChecking: true }));
-  
-      try {
-        const usersRef = collection(db, 'users');
-        const q = query(usersRef, where('username', '==', username.toLowerCase()));
-        const querySnapshot = await getDocs(q);
-  
-        setUsernameStatus({
-          isChecking: false,
-          isAvailable: querySnapshot.empty,
-          message: querySnapshot.empty ? 'Username is available' : 'Username is already taken'
-        });
-      } catch (error) {
-        setUsernameStatus({
-          isChecking: false,
-          isAvailable: false,
-          message: 'Error checking username availability'
-        });
-      }
-    }, 500);
-  
-    const handleChange = (e) => {
-      const { name, value } = e.target;
-      setFormData(prev => ({
-        ...prev,
-        [name]: value
-      }));
-  
-      if (name === 'username') {
-        checkUsername(value);
-      }
-  
-      if (name === 'password') {
-        setPasswordStrength(validatePassword(value));
-      }
-  
-      setError('');
-    };
-  
-    const handleSubmit = async (e) => {
-      e.preventDefault();
-      setLoading(true);
-      setError('');
-  
-      // Validation checks
-      if (formData.password !== formData.confirmPassword) {
-        showError('Passwords do not match', 'Password Error');
-        setLoading(false);
-        return;
-      }
-  
-      if (passwordStrength.score < 3) {
-        showError('Please choose a stronger password', 'Weak Password');
-        setLoading(false);
-        return;
-      }
-  
-      try {
-        const { confirmPassword, ...submitData } = formData;
-        await onSubmit(submitData);
-      } catch (error) {
-        if (error.code === 'auth/email-already-in-use') {
-          showError('This email is already registered. Please try logging in instead.', 'Email In Use');
-        } else if (error.code === 'auth/invalid-email') {
-          showError('Please enter a valid email address.', 'Invalid Email');
-        } else if (error.code === 'auth/weak-password') {
-          showError('Password should be at least 6 characters long.', 'Weak Password');
-        } else {
-          showError(error.message || 'Registration failed. Please try again.', 'Registration Error');
-        }
-      } finally {
-        setLoading(false);
-      }
-    };
-  
-    const getPasswordStrengthColor = (score) => {
-      if (score <= 2) return 'bg-red-500';
-      if (score <= 3) return 'bg-yellow-500';
-      if (score <= 4) return 'bg-green-500';
-      return 'bg-emerald-500';
-    };
-  
-    return (
-      <div className="bg-gray-900 rounded-2xl w-full max-w-md p-8 shadow-2xl border border-gray-800">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-3xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
-            Create Account
-          </h2>
-          <button onClick={onClose} className="p-2 hover:bg-gray-800 rounded-full transition-colors">
-            <X size={20} className="text-gray-400 hover:text-gray-300" />
-          </button>
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getPasswordStrengthColor = (score) => {
+    if (score <= 2) return 'bg-red-500';
+    if (score <= 3) return 'bg-yellow-500';
+    if (score <= 4) return 'bg-green-500';
+    return 'bg-emerald-500';
+  };
+
+  return (
+    <div className="bg-gray-900 rounded-2xl w-full max-w-md p-8 shadow-2xl border border-gray-800">
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-3xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
+          Create Account
+        </h2>
+        <button onClick={onClose} className="p-2 hover:bg-gray-800 rounded-full transition-colors">
+          <X size={20} className="text-gray-400 hover:text-gray-300" />
+        </button>
+      </div>
+
+      <p className="text-gray-400 mb-8">Join the ultimate gaming experience</p>
+
+      {error && (
+        <div className="mb-6 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400">
+          {error}
         </div>
-  
-        <p className="text-gray-400 mb-8">Join the ultimate gaming experience</p>
-  
-        {error && (
-          <div className="mb-6 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400">
-            {error}
+      )}
+
+      <form onSubmit={handleSubmit} className="space-y-5">
+        <div className="relative">
+          <div className="absolute left-3 top-3 text-gray-400">
+            <Mail size={18} />
           </div>
-        )}
-  
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div className="relative">
-            <div className="absolute left-3 top-3 text-gray-400">
-              <Mail size={18} />
-            </div>
-            <input
-              type="email"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              placeholder="Email"
-              required
-              className="w-full bg-gray-800/50 text-white pl-10 py-3 rounded-xl border border-gray-700 
-                focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all outline-none 
-                placeholder:text-gray-500"
-            />
+          <input
+            type="email"
+            name="email"
+            value={formData.email}
+            onChange={handleChange}
+            placeholder="Email"
+            required
+            className="w-full bg-gray-800/50 text-white pl-10 py-3 rounded-xl border border-gray-700 
+              focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all outline-none 
+              placeholder:text-gray-500"
+          />
+        </div>
+
+        <div className="relative">
+          <div className="absolute left-3 top-3 text-gray-400">
+            <User size={18} />
           </div>
-  
-          <div className="relative">
-            <div className="absolute left-3 top-3 text-gray-400">
-              <User size={18} />
+          <input
+            type="text"
+            name="username"
+            value={formData.username}
+            onChange={handleChange}
+            placeholder="Username"
+            required
+            className={`w-full bg-gray-800/50 text-white pl-10 py-3 rounded-xl border 
+              ${formData.username ? 
+                usernameStatus.isChecking ? 'border-yellow-500' :
+                usernameStatus.isAvailable ? 'border-green-500' : 'border-red-500'
+                : 'border-gray-700'} 
+              focus:ring-1 focus:ring-indigo-500 transition-all outline-none 
+              placeholder:text-gray-500`}
+          />
+          {formData.username && (
+            <div className={`absolute right-3 top-3.5 flex items-center space-x-2 text-sm
+              ${usernameStatus.isChecking ? 'text-yellow-500' : 
+                usernameStatus.isAvailable ? 'text-green-500' : 'text-red-500'}`}>
+              {usernameStatus.isChecking ? (
+                <div className="animate-spin h-4 w-4 border-2 border-yellow-500 rounded-full border-t-transparent" />
+              ) : (
+                <span>{usernameStatus.message}</span>
+              )}
             </div>
-            <input
-              type="text"
-              name="username"
-              value={formData.username}
-              onChange={handleChange}
-              placeholder="Username"
-              required
-              className={`w-full bg-gray-800/50 text-white pl-10 py-3 rounded-xl border 
-                ${formData.username ? 
-                  usernameStatus.isChecking ? 'border-yellow-500' :
-                  usernameStatus.isAvailable ? 'border-green-500' : 'border-red-500'
-                  : 'border-gray-700'} 
-                focus:ring-1 focus:ring-indigo-500 transition-all outline-none 
-                placeholder:text-gray-500`}
-            />
-            {formData.username && (
-              <div className={`absolute right-3 top-3.5 flex items-center space-x-2 text-sm
-                ${usernameStatus.isChecking ? 'text-yellow-500' : 
-                  usernameStatus.isAvailable ? 'text-green-500' : 'text-red-500'}`}>
-                {usernameStatus.isChecking ? (
-                  <div className="animate-spin h-4 w-4 border-2 border-yellow-500 rounded-full border-t-transparent" />
-                ) : (
-                  <span>{usernameStatus.message}</span>
-                )}
+          )}
+        </div>
+
+        <div className="space-y-3">
+          <PasswordInput
+            value={formData.password}
+            onChange={handleChange}
+            name="password"
+            placeholder="Password"
+          />
+          
+          {formData.password && (
+            <div className="space-y-2">
+              <div className="flex gap-1">
+                {[1, 2, 3, 4, 5].map((level) => (
+                  <div
+                    key={level}
+                    className={`h-1 w-full rounded-full ${
+                      level <= passwordStrength.score
+                        ? getPasswordStrengthColor(passwordStrength.score)
+                        : 'bg-gray-700'
+                    }`}
+                  />
+                ))}
               </div>
-            )}
-          </div>
-  
-          <div className="space-y-3">
-            <PasswordInput
-              value={formData.password}
-              onChange={handleChange}
-              name="password"
-              placeholder="Password"
-            />
-            
-            {formData.password && (
-              <div className="space-y-2">
-                <div className="flex gap-1">
-                  {[1, 2, 3, 4, 5].map((level) => (
-                    <div
-                      key={level}
-                      className={`h-1 w-full rounded-full ${
-                        level <= passwordStrength.score
-                          ? getPasswordStrengthColor(passwordStrength.score)
-                          : 'bg-gray-700'
-                      }`}
-                    />
-                  ))}
-                </div>
-                <p className="text-xs text-gray-400">
-                  {passwordStrength.feedback || 'Password strength: Strong'}
-                </p>
-              </div>
-            )}
-  
-            <PasswordInput
-              value={formData.confirmPassword}
-              onChange={handleChange}
-              name="confirmPassword"
-              placeholder="Confirm Password"
-            />
-          </div>
-  
-          <div className="relative">
-            <div className="absolute left-3 top-3 text-gray-400">
-              <Calendar size={18} />
+              <p className="text-xs text-gray-400">
+                {passwordStrength.feedback || 'Password strength: Strong'}
+              </p>
             </div>
-            <input
-              type="date"
-              name="dateOfBirth"
-              value={formData.dateOfBirth}
-              onChange={handleChange}
-              required
-              className="w-full bg-gray-800/50 text-white pl-10 py-3 rounded-xl border border-gray-700 
-                focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all outline-none 
-                placeholder:text-gray-500"
-            />
+          )}
+
+          <PasswordInput
+            value={formData.confirmPassword}
+            onChange={handleChange}
+            name="confirmPassword"
+            placeholder="Confirm Password"
+          />
+        </div>
+
+        <div className="relative">
+          <div className="absolute left-3 top-3 text-gray-400">
+            <Calendar size={18} />
           </div>
-   <div className="relative">
-   <div className="absolute left-3 top-3 text-gray-400">
+          <input
+            type="date"
+            name="dateOfBirth"
+            value={formData.dateOfBirth}
+            onChange={handleChange}
+            required
+            className="w-full bg-gray-800/50 text-white pl-10 py-3 rounded-xl border border-gray-700 
+              focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all outline-none 
+              placeholder:text-gray-500"
+          />
+        </div>
+
+        <div className="relative">
+          <div className="absolute left-3 top-3 text-gray-400">
             <Phone size={18} />
           </div>
           <input

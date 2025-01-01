@@ -1,176 +1,193 @@
-import React, { useState } from 'react';
-import { Mail, MessageCircle } from 'lucide-react';
-import { createUserWithEmailAndPassword, sendEmailVerification } from 'firebase/auth';
-import { collection, query, where, getDocs, doc, setDoc } from 'firebase/firestore';
-import { auth, db } from '../firebase';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import PhoneVerificationSteps from './PhoneVerificationSteps';
-import { RegisterModal } from './Navbar';
-import { updateProfile } from 'firebase/auth';
-import { data } from 'react-router-dom';
-import { serverTimestamp } from 'firebase/firestore';
+import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../firebase';
 
-const AuthFlow = () => {
-  const [currentModal, setCurrentModal] = useState(null);
+const VerificationRoute = () => {
+  const [code, setCode] = useState(['', '', '', '', '', '']);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [verificationMethod, setVerificationMethod] = useState('email');
+  const inputs = useRef([]);
   const navigate = useNavigate();
 
-  // Handler for email registration - same as Navbar.js
-  const handleRegisterSubmit = async (formData) => {
+  useEffect(() => {
+    const checkVerificationStatus = async () => {
+      // Check if registration is in progress
+      const isRegistering = localStorage.getItem('registrationInProgress');
+      const requiresVerification = localStorage.getItem('requiresVerification');
+      
+      if (!isRegistering && !requiresVerification) {
+        navigate('/', { replace: true });
+        return;
+      }
+
+      // Check verification method
+      if (localStorage.getItem('phoneVerification') === 'true') {
+        setVerificationMethod('phone');
+      }
+
+      // Check if already verified
+      if (localStorage.getItem('emailVerified') === 'true') {
+        // Clear verification data
+        localStorage.removeItem('registrationInProgress');
+        localStorage.removeItem('requiresVerification');
+        localStorage.removeItem('userEmail');
+        localStorage.removeItem('userId');
+        navigate('/app', { replace: true });
+      }
+    };
+
+    checkVerificationStatus();
+  }, [navigate]);
+
+  const handleChange = (element, index) => {
+    if (isNaN(element.value)) return;
+
+    setCode(prevCode => {
+      const newCode = [...prevCode];
+      newCode[index] = element.value;
+      return newCode;
+    });
+    
+    if (element.value && index < 5) {
+      inputs.current[index + 1].focus();
+    }
+  };
+
+  const handleSubmit = async () => {
+    const verificationCode = code.join('');
+    const userId = localStorage.getItem('userId');
+  
+    setLoading(true);
+    setError('');
+  
     try {
-      // First create the user in Firebase Auth
-      const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
-      const user = userCredential.user;
-  
-      // Then update Firestore with their data
-      const userDoc = {
-        email: formData.email,
-        username: formData.username.toLowerCase(),
-        displayUsername: formData.username,
-        dateOfBirth: formData.dateOfBirth,
-        createdAt: serverTimestamp(),
-        emailVerified: false,
-        balance: 0,
-        lastActive: serverTimestamp(),
-        status: 'active'
-      };
-  
-      // Use set with merge option to avoid permission issues
-      await setDoc(doc(db, 'users', user.uid), userDoc, { merge: true });
-  
-      // Send verification email through your backend
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/generate-verification`, {
+      const endpoint = verificationMethod === 'phone' 
+        ? '/api/verify-phone-code'
+        : '/api/verify-code';
+
+      const response = await fetch(`${process.env.REACT_APP_API_URL}${endpoint}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          email: formData.email,
-          userId: user.uid,
-          username: formData.username
+          code: verificationCode,
+          userId: userId,
+          phoneNumber: localStorage.getItem('phoneNumber')
         })
       });
   
+      const data = await response.json();
+  
       if (!response.ok) {
-        throw new Error('Failed to send verification email');
+        throw new Error(data.error || 'Verification failed');
       }
   
-      // Set verification flags
-      localStorage.setItem('requiresVerification', 'true');
-      localStorage.setItem('userEmail', formData.email);
-      localStorage.setItem('userId', user.uid);
-  
-      // Navigate to verification page
-      return navigate('/verify-email');
-    } catch (error) {
-      console.error('Registration error:', error);
-      if (error.code === 'auth/email-already-in-use') {
-        throw new Error('Email already registered. Please login instead.');
+      // Update user document
+      if (userId) {
+        const userRef = doc(db, 'users', userId);
+        await updateDoc(userRef, {
+          emailVerified: true,
+          lastActive: serverTimestamp(),
+          verifiedAt: serverTimestamp()
+        });
       }
-      throw new Error('Registration failed. Please try again.');
-    }
-  };
 
-
-  // Handler for phone registration
-  const handlePhoneRegistrationComplete = async (data) => {
-    try {
-      // Create unique ID for phone users
-      const timestamp = Date.now();
-      const phoneEmail = `phone_${data.phone.replace(/\D/g, '')}${timestamp}@nayaplay.co`;
+      // Clear all verification-related localStorage items
+      localStorage.removeItem('registrationInProgress');
+      localStorage.removeItem('requiresVerification');
+      localStorage.removeItem('userEmail');
+      localStorage.removeItem('userId');
+      localStorage.removeItem('phoneNumber');
+      localStorage.removeItem('phoneVerification');
       
-      const userCredential = await createUserWithEmailAndPassword(auth, phoneEmail, data.password);
-      const user = userCredential.user;
-  
-      await setDoc(doc(db, 'users', user.uid), {
-        username: data.username.toLowerCase(),
-        displayUsername: data.username,
-        phone: data.phone,
-        createdAt: new Date().toISOString(),
-        emailVerified: true, // Phone users are pre-verified
-        phoneVerified: true,
-        balance: 0,
-        totalBets: 0,
-        totalWagered: 0,
-        totalWon: 0,
-        vipLevel: 0,
-        vipPoints: 0,
-        lastActive: new Date().toISOString(),
-        status: 'active'
-      });
-  
-      // Navigate directly to app for phone users
-      navigate('/app');
+      if (verificationMethod === 'email') {
+        localStorage.setItem('emailVerified', 'true');
+      }
+      
+      navigate('/app', { replace: true });
     } catch (error) {
-      console.error('Registration error:', error);
-      throw new Error('Registration failed. Please try again.');
+      console.error('Verification error:', error);
+      setError(error.message || 'Invalid verification code');
+    } finally {
+      setLoading(false);
     }
   };
 
+  const handleKeyDown = (e, index) => {
+    if (e.key === 'Backspace' && !code[index] && index > 0) {
+      inputs.current[index - 1].focus();
+      setCode(prevCode => {
+        const newCode = [...prevCode];
+        newCode[index - 1] = '';
+        return newCode;
+      });
+    }
+  };
 
   return (
-    <div className="max-w-md mx-auto space-y-4">
-      <div className="text-sm font-medium text-white/50 mb-3">
-        Choose how to continue
-      </div>
-      
-      {/* Email Registration Button */}
-      <button 
-        onClick={() => setCurrentModal('email')}
-        className="w-full group flex items-center justify-between px-4 py-3 rounded-xl
-          bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20
-          transition-all duration-200"
-      >
-        <div className="flex items-center gap-3">
-          <Mail size={20} className="text-white/70" />
-          <div className="text-left">
-            <div className="font-medium text-white">Continue with Email</div>
-            <div className="text-sm text-white/50">Using your email address</div>
+    <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
+      <div className="w-full max-w-md bg-gray-800 p-8 rounded-xl shadow-2xl">
+        <h2 className="text-2xl font-bold text-white text-center mb-8">
+          Enter Verification Code
+        </h2>
+        
+        <p className="text-gray-400 text-sm text-center mb-6">
+          {verificationMethod === 'phone' 
+            ? `We sent a code to ${localStorage.getItem('phoneNumber')}`
+            : `We sent a code to ${localStorage.getItem('userEmail')}`
+          }
+        </p>
+        
+        <div className="flex justify-center space-x-4 mb-8">
+          {code.map((digit, idx) => (
+            <input
+              key={idx}
+              type="text"
+              maxLength="1"
+              value={digit}
+              ref={el => inputs.current[idx] = el}
+              onChange={e => handleChange(e.target, idx)}
+              onKeyDown={e => handleKeyDown(e, idx)}
+              className="w-12 h-12 text-center text-2xl font-bold bg-gray-700 text-white 
+                rounded-lg border-2 border-gray-600 focus:border-indigo-500 
+                focus:ring-2 focus:ring-indigo-500 transition-all duration-200"
+            />
+          ))}
+        </div>
+
+        {error && (
+          <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 
+            text-red-400 text-center mb-4">
+            {error}
           </div>
-        </div>
-        <div className="text-white/30 group-hover:text-white/70 transition-colors duration-200">→</div>
-      </button>
-      
-      {/* Phone Registration Button */}
-      <button 
-        onClick={() => setCurrentModal('phone')}
-        className="w-full group flex items-center justify-between px-4 py-3 rounded-xl
-          bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20
-          transition-all duration-200"
-      >
-        <div className="flex items-center gap-3">
-          <MessageCircle size={20} className="text-white/70" />
-          <div className="text-left">
-            <div className="font-medium text-white">Continue with Phone</div>
-            <div className="text-sm text-white/50">Using your phone number</div>
-          </div>
-        </div>
-        <div className="text-white/30 group-hover:text-white/70 transition-colors duration-200">→</div>
-      </button>
+        )}
 
-      <div className="text-sm text-white/40 text-center mt-6">
-        By continuing, you agree to our Terms of Service and Privacy Policy
+        <button
+          onClick={handleSubmit}
+          disabled={loading || code.some(d => !d)}
+          className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-3 
+            rounded-xl font-medium hover:from-indigo-500 hover:to-purple-500 
+            transition-all duration-200 transform hover:scale-[1.02] 
+            disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none 
+            flex items-center justify-center"
+        >
+          {loading ? (
+            <div className="h-5 w-5 border-2 border-white border-t-transparent 
+              rounded-full animate-spin" />
+          ) : (
+            `Verify ${verificationMethod === 'phone' ? 'Phone' : 'Email'}`
+          )}
+        </button>
+
+        <p className="text-gray-400 text-sm text-center mt-4">
+          Didn't receive the code? Check your spam folder or try registering again.
+        </p>
       </div>
-
-      {/* Modals */}
-      {currentModal === 'email' && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <RegisterModal
-            onSubmit={handleRegisterSubmit}
-            onClose={() => setCurrentModal(null)}
-          />
-        </div>
-      )}
-
-      {currentModal === 'phone' && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <PhoneVerificationSteps
-            onBack={() => setCurrentModal(null)}
-            onComplete={handlePhoneRegistrationComplete}
-          />
-        </div>
-      )}
     </div>
   );
 };
 
-export default AuthFlow;
+export default VerificationRoute;

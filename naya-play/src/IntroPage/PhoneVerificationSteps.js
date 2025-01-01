@@ -82,59 +82,80 @@ const PhoneVerificationSteps = ({ onBack, onComplete }) => {
    return { score, feedback: feedback.join(' • ') };
  };
 
- const handleSendOTP = async (e) => {
+// In your handleSendOTP function, modify it like this:
+const handleSendOTP = async (e) => {
   e.preventDefault();
   setLoading(true);
   setError('');
   
   try {
-    const formattedNumber = phoneData.phoneNumber.replace(/\D/g, '');
+    // Remove everything except digits and ensure it has the + prefix
+    const formattedNumber = phoneData.phoneNumber.startsWith('+') ? 
+      phoneData.phoneNumber : 
+      `+${phoneData.phoneNumber.replace(/\D/g, '')}`;
+
+    console.log('Sending verification to:', formattedNumber); // For debugging
+
     const response = await fetch(`${process.env.REACT_APP_API_URL}/api/send-phone-verification`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
-        phoneNumber: `+${formattedNumber}` 
+        phoneNumber: formattedNumber
       })
     });
 
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
     const data = await response.json();
     if (data.success) setStep('otp');
-    else throw new Error(data.error);
+    else throw new Error(data.error || 'Failed to send verification code');
   } catch (error) {
-    setError('Failed to send verification code');
+    console.error('Error:', error);
+    setError(error.message || 'Failed to send verification code');
   } finally {
     setLoading(false);
   }
 };
 
+const handleVerifyOTP = async (e) => {
+  e.preventDefault();
+  setLoading(true);
+  setError('');
+ 
+  try {
+    // Use the same formatting as when sending
+    const formattedNumber = phoneData.phoneNumber.startsWith('+') ? 
+      phoneData.phoneNumber : 
+      `+${phoneData.phoneNumber.replace(/\D/g, '')}`;
 
- const handleVerifyOTP = async (e) => {
-   e.preventDefault();
-   setLoading(true);
-   setError('');
- 
-   try {
-     const response = await fetch(`${process.env.REACT_APP_API_URL}/api/verify-phone-code`, {
-       method: 'POST',
-       headers: { 'Content-Type': 'application/json' },
-       body: JSON.stringify({
-         phoneNumber: phoneData.phoneNumber,
-         code: phoneData.otp
-       })
-     });
- 
-     const data = await response.json();
-     if (!data.success || !data.verified) {
-       throw new Error('Invalid verification code');
-     }
- 
-     setStep('registration');
-   } catch (error) {
-     setError(error.message);
-   } finally {
-     setLoading(false);
-   }
- };
+    const response = await fetch(`${process.env.REACT_APP_API_URL}/api/verify-phone-code`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        phoneNumber: formattedNumber,
+        code: phoneData.otp
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    if (!data.success || !data.verified) {
+      throw new Error('Invalid verification code');
+    }
+
+    setStep('registration');
+  } catch (error) {
+    console.error('Error:', error);
+    setError(error.message || 'Failed to verify code');
+  } finally {
+    setLoading(false);
+  }
+};
 
  const handleRegistrationSubmit = async (e) => {
   e.preventDefault();
