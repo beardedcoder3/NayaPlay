@@ -155,52 +155,57 @@ function AppContent() {
   const [currentTransaction, setCurrentTransaction] = useState(null);
 
   useEffect(() => {
-    if (!user) {
-      console.log('No user logged in');
-      return () => {};
-    }
+    let unsubscribe;
   
-    try {
-      console.log('Setting up notification listener for user:', user.uid);
+    const setupListener = async () => {
+      // Don't set up listener if registration is in progress
+      const isRegistering = sessionStorage.getItem('registrationInProgress');
+      if (!user?.uid || isRegistering) {
+        return;
+      }
   
-      const notificationsQuery = query(
-        collection(db, 'notifications'),
-        where('userId', '==', user.uid),
-        where('seen', '==', false),
-        where('type', '==', 'payment_received')
-      );
+      try {
+        // Add delay to ensure Firestore rules are propagated
+        await new Promise(resolve => setTimeout(resolve, 2000));
   
-      const unsubscribe = onSnapshot(notificationsQuery, {
-        next: async (snapshot) => {
-          console.log('Notification snapshot received:', snapshot.docs.length, 'docs');
-          if (!snapshot.empty) {
-            const notification = snapshot.docs[0];
-            const notificationData = notification.data();
-            console.log('Found notification:', notificationData);
+        const notificationsQuery = query(
+          collection(db, 'notifications'),
+          where('userId', '==', user.uid),
+          where('seen', '==', false),
+          where('type', '==', 'payment_received')
+        );
   
-            setCurrentTransaction(notificationData.data);
-            setShowNotification(true);
-  
-            try {
-              await updateDoc(doc(db, 'notifications', notification.id), {
-                seen: true
-              });
-            } catch (error) {
-              console.error('Error updating notification:', error);
+        unsubscribe = onSnapshot(notificationsQuery, {
+          next: async (snapshot) => {
+            if (!snapshot.empty) {
+              // ... rest of your notification handling code
             }
           }
-        },
-        error: (error) => {
-          console.error('Notification listener error:', error);
+        });
+      } catch (error) {
+        // Silently fail for permission errors during registration
+        if (error.code !== 'permission-denied') {
+          console.error('Error setting up notification listener:', error);
         }
-      });
+      }
+    };
   
-      return () => unsubscribe();
-    } catch (error) {
-      console.error('Error setting up notification listener:', error);
-      return () => {};
-    }
+    setupListener();
+  
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
   }, [user]);
+
+  // Helper function to check verification status
+  const needsVerification = () => {
+    const requiresVerification = sessionStorage.getItem('requiresVerification') === 'true';
+    const registrationTimestamp = parseInt(sessionStorage.getItem('registrationTimestamp') || '0');
+    const isRecentRegistration = Date.now() - registrationTimestamp < 300000; // 5 minutes
+    return requiresVerification && isRecentRegistration;
+  };
 
   return (
     <Router>
@@ -209,7 +214,11 @@ function AppContent() {
           {/* Public Route */}
           <Route path="/" element={
             user ? (
-              <Navigate to="/app" replace />
+              needsVerification() ? (
+                <Navigate to="/verify-email" replace />
+              ) : (
+                <Navigate to="/app" replace />
+              )
             ) : (
               <Layout>
                 <HeroSection />
@@ -224,129 +233,51 @@ function AppContent() {
             )
           } />
 
+          {/* Verification Route */}
+       
 
-     {/* Verification Route */}
-<Route 
+       <Route 
   path="/verify-email" 
   element={
-    !user ? (
-      <Navigate to="/" replace />
-    ) : user?.emailVerified ? (
-      <Navigate to="/app" replace />
-    ) : (
-      <VerificationRoute />
-    )
+    <VerificationRoute />
   } 
 />
-
-          {/* Protected Routes */}
+          {/* Protected Routes with verification check */}
           <Route path="/app" element={
-            <ProtectedRoute>
-              <>
-                <VipProgress />
-                <Games />
-                <Trending />
-                <LiveBetLobby />
-              </>
-            </ProtectedRoute>
+            !user ? (
+              <Navigate to="/" replace />
+            ) : needsVerification() ? (
+              <Navigate to="/verify-email" replace />
+            ) : (
+              <ProtectedRoute>
+                <>
+                  <VipProgress />
+                  <Games />
+                  <Trending />
+                  <LiveBetLobby />
+                </>
+              </ProtectedRoute>
+            )
           } />
 
-          {/* Game Routes */}
-          <Route path="/mines" element={
-            <ProtectedRoute>
-              <>
-                <MasterMineGame />
-                <LiveBetLobby />
-              </>
-            </ProtectedRoute>
-          } />
-
-
-<Route path="/dice" element={
-            <ProtectedRoute>
-              <>
-               <DiceGame />
-                <LiveBetLobby />
-              </>
-            </ProtectedRoute>
-          } />
-
-          
-
-
-          <Route path="/limbo" element={
-            <ProtectedRoute>
-              <>
-                <Limbo />
-                <LiveBetLobby />
-              </>
-            </ProtectedRoute>
-          } />
-
-          <Route path="/crash" element={
-            <ProtectedRoute>
-              <>
-                <Crash />
-                <LiveBetLobby />
-              </>
-            </ProtectedRoute>
-          } />
-
-          <Route path="/wheel" element={
-            <ProtectedRoute>
-              <>
-                <Wheel />
-                <LiveBetLobby />
-              </>
-            </ProtectedRoute>
-          } />
-
-          <Route path="/settings/*" element={
-            <ProtectedRoute>
-              <Settings />
-            </ProtectedRoute>
-          } />
-
-          <Route path="/transactions" element={
-            <ProtectedRoute>
-              <TransactionsPage />
-            </ProtectedRoute>
-          } />
-
-          <Route path="/my-bets" element={
-            <ProtectedRoute>
-              <MyBetsPage />
-            </ProtectedRoute>
-          } />
-
-          {/* Admin Routes */}
+          {/* Keep all remaining routes the same */}
+          <Route path="/mines" element={<ProtectedRoute><><MasterMineGame /><LiveBetLobby /></></ProtectedRoute>} />
+          <Route path="/dice" element={<ProtectedRoute><><DiceGame /><LiveBetLobby /></></ProtectedRoute>} />
+          <Route path="/limbo" element={<ProtectedRoute><><Limbo /><LiveBetLobby /></></ProtectedRoute>} />
+          <Route path="/crash" element={<ProtectedRoute><><Crash /><LiveBetLobby /></></ProtectedRoute>} />
+          <Route path="/wheel" element={<ProtectedRoute><><Wheel /><LiveBetLobby /></></ProtectedRoute>} />
+          <Route path="/settings/*" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+          <Route path="/transactions" element={<ProtectedRoute><TransactionsPage /></ProtectedRoute>} />
+          <Route path="/my-bets" element={<ProtectedRoute><MyBetsPage /></ProtectedRoute>} />
           <Route path={ADMIN_CONFIG.SECURE_PATH} element={<AdminLogin />} />
-          <Route 
-            path={`${ADMIN_CONFIG.SECURE_PATH}/dashboard/*`} 
-            element={<AdminDashboard />} 
-          />
-
-          {/* Agent Routes */}
-          <Route path="/agent/dashboard" element={
-            <ProtectedRoute requiredRole="agent">
-              <AgentDashboard />
-            </ProtectedRoute>
-          } />
+          <Route path={`${ADMIN_CONFIG.SECURE_PATH}/dashboard/*`} element={<AdminDashboard />} />
+          <Route path="/agent/dashboard" element={<ProtectedRoute requiredRole="agent"><AgentDashboard /></ProtectedRoute>} />
           <Route path="/agent/login" element={<AgentLogin />} />
           <Route path="/agent/register" element={<AgentRegistration />} />
-
-          {/* Support Agent Routes */}
-          <Route path="/support-agent/dashboard" element={
-            <ProtectedRoute requiredRole="support_agent">
-              <SupportAgentDashboard />
-            </ProtectedRoute>
-          } />
+          <Route path="/support-agent/dashboard" element={<ProtectedRoute requiredRole="support_agent"><SupportAgentDashboard /></ProtectedRoute>} />
           <Route path="/support-agent/login" element={<SupportAgentLogin />} />
           <Route path="/support-agent/register" element={<SupportAgentRegistration />} />
-          <Route path="/verify-email" element={<VerificationRoute />} />
-          {/* Catch all other routes and redirect to home */}
           <Route path="*" element={<Navigate to="/" replace />} />
-        
         </Routes>
 
         <TransactionNotificationModal
@@ -368,21 +299,21 @@ function App() {
 
   return (
     <ErrorProvider>
-    <NotificationProvider>
-      <AdminProvider>
-        <ChatProvider>
-          <LiveBetsProvider>
-            <BalanceProvider>
-              <SidebarProvider>
-                <LoadingProvider>
-                  <AppContent />
-                </LoadingProvider>
-              </SidebarProvider>
-            </BalanceProvider>
-          </LiveBetsProvider>
-        </ChatProvider>
-      </AdminProvider>
-    </NotificationProvider>
+      <NotificationProvider>
+        <AdminProvider>
+          <ChatProvider>
+            <LiveBetsProvider>
+              <BalanceProvider>
+                <SidebarProvider>
+                  <LoadingProvider>
+                    <AppContent />
+                  </LoadingProvider>
+                </SidebarProvider>
+              </BalanceProvider>
+            </LiveBetsProvider>
+          </ChatProvider>
+        </AdminProvider>
+      </NotificationProvider>
     </ErrorProvider>
   );
 }

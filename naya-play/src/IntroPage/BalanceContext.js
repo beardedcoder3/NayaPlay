@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { doc, onSnapshot, collection, query, where, orderBy, updateDoc, increment } from 'firebase/firestore';
+import { doc, onSnapshot, collection, query, where, orderBy, updateDoc, increment, getDoc } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 
 const BalanceContext = createContext();
@@ -11,7 +11,10 @@ export function BalanceProvider({ children }) {
   const auth = getAuth();
 
   useEffect(() => {
-    if (!auth.currentUser) return;
+    // Skip if during registration
+    if (!auth.currentUser || sessionStorage.getItem('registrationInProgress')) {
+      return;
+    }
 
     const unsubscribers = [];
 

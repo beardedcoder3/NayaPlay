@@ -21,6 +21,7 @@ import debounce from 'lodash/debounce';
 import { Calendar, Phone, Lock, EyeOff, Eye } from 'lucide-react';
 import { useError } from '../Error/ErrorContext';
 import { ErrorProvider } from '../Error/ErrorContext';
+import { serverTimestamp } from 'firebase/firestore';
 
 // GameSearch Component
 const GameSearch = ({ isOpen, onClose }) => {
@@ -721,26 +722,28 @@ const NavBar = () => {
 
   const handleRegisterSubmit = async (formData) => {
     try {
+      localStorage.setItem('registrationInProgress', 'true');
+  
+      // 1. Create Firebase Auth user
       const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
       const user = userCredential.user;
   
+      // 2. Create user document with notifications field
       await setDoc(doc(db, 'users', user.uid), {
         email: formData.email,
         username: formData.username.toLowerCase(),
         displayUsername: formData.username,
         dateOfBirth: formData.dateOfBirth,
-        createdAt: new Date().toISOString(),
+        createdAt: serverTimestamp(),
         emailVerified: false,
         balance: 0,
-        totalBets: 0,
-        totalWagered: 0,
-        totalWon: 0,
-        vipLevel: 0,
-        vipPoints: 0,
-        lastActive: new Date().toISOString(),
-        status: 'active'
+        lastActive: serverTimestamp(),
+        status: 'active',
+        notifications: [],
+        notificationsEnabled: true
       });
   
+      // 3. Send verification email
       const response = await fetch(`${process.env.REACT_APP_API_URL}/api/generate-verification`, {
         method: 'POST',
         headers: {
@@ -757,45 +760,28 @@ const NavBar = () => {
         throw new Error('Failed to send verification email');
       }
   
+      // 4. Set localStorage items
       localStorage.setItem('requiresVerification', 'true');
       localStorage.setItem('userEmail', formData.email);
       localStorage.setItem('userId', user.uid);
-      
-      navigate('/verify-email');
+  
+      // 5. Close modal and navigate
+      setModalState('closed');
+      navigate('/verify-email', { replace: true });
+  
     } catch (error) {
       console.error('Registration error:', error);
+      localStorage.removeItem('registrationInProgress');
+      localStorage.removeItem('requiresVerification');
+      localStorage.removeItem('userEmail');
+      localStorage.removeItem('userId');
       
-      // Show specific error messages
       if (error.code === 'auth/email-already-in-use') {
-        showError(
-          'This email is already registered. Please try logging in instead.',
-          'Email In Use'
-        );
-      } else if (error.code === 'auth/invalid-email') {
-        showError(
-          'Please enter a valid email address.',
-          'Invalid Email'
-        );
-      } else if (error.code === 'auth/weak-password') {
-        showError(
-          'Password should be at least 6 characters long.',
-          'Weak Password'
-        );
-      } else if (error.message.includes('verification')) {
-        showError(
-          error.message,
-          'Verification Error'
-        );
-      } else {
-        showError(
-          'An unexpected error occurred. Please try again.',
-          'Registration Error'
-        );
+        throw new Error('Email already registered. Please login instead.');
       }
+      throw new Error('Registration failed. Please try again.');
     }
   };
-
-  
   const handleSetupWallet = async () => {
     try {
       if (!auth.currentUser) {

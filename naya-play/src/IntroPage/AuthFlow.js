@@ -1,193 +1,168 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState } from 'react';
+import { Mail, MessageCircle } from 'lucide-react';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { collection, query, where, getDocs, doc, setDoc } from 'firebase/firestore';
+import { auth, db } from '../firebase';
 import { useNavigate } from 'react-router-dom';
-import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../firebase';
+import PhoneVerificationSteps from './PhoneVerificationSteps';
+import { RegisterModal } from './Navbar';
+import { serverTimestamp } from 'firebase/firestore';
 
-const VerificationRoute = () => {
-  const [code, setCode] = useState(['', '', '', '', '', '']);
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [verificationMethod, setVerificationMethod] = useState('email');
-  const inputs = useRef([]);
+const AuthFlow = () => {
+  const [currentModal, setCurrentModal] = useState(null);
+  const [isRegistering, setIsRegistering] = useState(false);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    const checkVerificationStatus = async () => {
-      // Check if registration is in progress
-      const isRegistering = localStorage.getItem('registrationInProgress');
-      const requiresVerification = localStorage.getItem('requiresVerification');
-      
-      if (!isRegistering && !requiresVerification) {
-        navigate('/', { replace: true });
-        return;
-      }
-
-      // Check verification method
-      if (localStorage.getItem('phoneVerification') === 'true') {
-        setVerificationMethod('phone');
-      }
-
-      // Check if already verified
-      if (localStorage.getItem('emailVerified') === 'true') {
-        // Clear verification data
-        localStorage.removeItem('registrationInProgress');
-        localStorage.removeItem('requiresVerification');
-        localStorage.removeItem('userEmail');
-        localStorage.removeItem('userId');
-        navigate('/app', { replace: true });
-      }
-    };
-
-    checkVerificationStatus();
-  }, [navigate]);
-
-  const handleChange = (element, index) => {
-    if (isNaN(element.value)) return;
-
-    setCode(prevCode => {
-      const newCode = [...prevCode];
-      newCode[index] = element.value;
-      return newCode;
-    });
-    
-    if (element.value && index < 5) {
-      inputs.current[index + 1].focus();
-    }
-  };
-
-  const handleSubmit = async () => {
-    const verificationCode = code.join('');
-    const userId = localStorage.getItem('userId');
-  
-    setLoading(true);
-    setError('');
-  
+  const handleRegisterSubmit = async (formData) => {
     try {
-      const endpoint = verificationMethod === 'phone' 
-        ? '/api/verify-phone-code'
-        : '/api/verify-code';
-
-      const response = await fetch(`${process.env.REACT_APP_API_URL}${endpoint}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          code: verificationCode,
-          userId: userId,
-          phoneNumber: localStorage.getItem('phoneNumber')
-        })
+      setIsRegistering(true);
+      
+      // Clear and set session storage first
+      sessionStorage.clear();
+      sessionStorage.setItem('registrationInProgress', 'true');
+  
+      // Create user
+      const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
+      const user = userCredential.user;
+  
+      // Create user document
+      await setDoc(doc(db, 'users', user.uid), {
+        email: formData.email,
+        username: formData.username.toLowerCase(),
+        displayUsername: formData.username,
+        dateOfBirth: formData.dateOfBirth,
+        createdAt: serverTimestamp(),
+        emailVerified: false,
+        balance: 0,
+        lastActive: serverTimestamp(),
+        status: 'active'
       });
   
-      const data = await response.json();
+      // Store required data
+      sessionStorage.setItem('userId', user.uid);
+      sessionStorage.setItem('userEmail', formData.email);
   
-      if (!response.ok) {
-        throw new Error(data.error || 'Verification failed');
-      }
+      // Close modal and redirect
+      setCurrentModal(null);
+      window.location.replace('/verify-email');
   
-      // Update user document
-      if (userId) {
-        const userRef = doc(db, 'users', userId);
-        await updateDoc(userRef, {
-          emailVerified: true,
-          lastActive: serverTimestamp(),
-          verifiedAt: serverTimestamp()
-        });
-      }
-
-      // Clear all verification-related localStorage items
-      localStorage.removeItem('registrationInProgress');
-      localStorage.removeItem('requiresVerification');
-      localStorage.removeItem('userEmail');
-      localStorage.removeItem('userId');
-      localStorage.removeItem('phoneNumber');
-      localStorage.removeItem('phoneVerification');
-      
-      if (verificationMethod === 'email') {
-        localStorage.setItem('emailVerified', 'true');
-      }
-      
-      navigate('/app', { replace: true });
     } catch (error) {
-      console.error('Verification error:', error);
-      setError(error.message || 'Invalid verification code');
+      sessionStorage.clear();
+      console.error('Registration error:', error);
+      throw error;
+    }
+  };
+  
+
+  const handlePhoneRegistrationComplete = async (data) => {
+    try {
+      setIsRegistering(true);
+      
+      // Create unique ID for phone users
+      const timestamp = Date.now();
+      const phoneEmail = `phone_${data.phone.replace(/\D/g, '')}${timestamp}@nayaplay.co`;
+      
+      const userCredential = await createUserWithEmailAndPassword(auth, phoneEmail, data.password);
+      const user = userCredential.user;
+  
+      await setDoc(doc(db, 'users', user.uid), {
+        username: data.username.toLowerCase(),
+        displayUsername: data.username,
+        phone: data.phone,
+        createdAt: serverTimestamp(),
+        emailVerified: true,
+        phoneVerified: true,
+        balance: 0,
+        totalBets: 0,
+        totalWagered: 0,
+        totalWon: 0,
+        vipLevel: 0,
+        vipPoints: 0,
+        lastActive: serverTimestamp(),
+        status: 'active'
+      });
+  
+      // Close modal before navigation
+      setCurrentModal(null);
+      navigate('/app', { replace: true });
+      
+    } catch (error) {
+      console.error('Registration error:', error);
+      throw new Error('Registration failed. Please try again.');
     } finally {
-      setLoading(false);
+      setIsRegistering(false);
     }
   };
 
-  const handleKeyDown = (e, index) => {
-    if (e.key === 'Backspace' && !code[index] && index > 0) {
-      inputs.current[index - 1].focus();
-      setCode(prevCode => {
-        const newCode = [...prevCode];
-        newCode[index - 1] = '';
-        return newCode;
-      });
-    }
+  const handleModalClose = () => {
+    localStorage.removeItem('registrationInProgress');
+    setCurrentModal(null);
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-gray-800 p-8 rounded-xl shadow-2xl">
-        <h2 className="text-2xl font-bold text-white text-center mb-8">
-          Enter Verification Code
-        </h2>
-        
-        <p className="text-gray-400 text-sm text-center mb-6">
-          {verificationMethod === 'phone' 
-            ? `We sent a code to ${localStorage.getItem('phoneNumber')}`
-            : `We sent a code to ${localStorage.getItem('userEmail')}`
-          }
-        </p>
-        
-        <div className="flex justify-center space-x-4 mb-8">
-          {code.map((digit, idx) => (
-            <input
-              key={idx}
-              type="text"
-              maxLength="1"
-              value={digit}
-              ref={el => inputs.current[idx] = el}
-              onChange={e => handleChange(e.target, idx)}
-              onKeyDown={e => handleKeyDown(e, idx)}
-              className="w-12 h-12 text-center text-2xl font-bold bg-gray-700 text-white 
-                rounded-lg border-2 border-gray-600 focus:border-indigo-500 
-                focus:ring-2 focus:ring-indigo-500 transition-all duration-200"
-            />
-          ))}
-        </div>
-
-        {error && (
-          <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 
-            text-red-400 text-center mb-4">
-            {error}
-          </div>
-        )}
-
-        <button
-          onClick={handleSubmit}
-          disabled={loading || code.some(d => !d)}
-          className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-3 
-            rounded-xl font-medium hover:from-indigo-500 hover:to-purple-500 
-            transition-all duration-200 transform hover:scale-[1.02] 
-            disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none 
-            flex items-center justify-center"
-        >
-          {loading ? (
-            <div className="h-5 w-5 border-2 border-white border-t-transparent 
-              rounded-full animate-spin" />
-          ) : (
-            `Verify ${verificationMethod === 'phone' ? 'Phone' : 'Email'}`
-          )}
-        </button>
-
-        <p className="text-gray-400 text-sm text-center mt-4">
-          Didn't receive the code? Check your spam folder or try registering again.
-        </p>
+    <div className="max-w-md mx-auto space-y-4">
+      <div className="text-sm font-medium text-white/50 mb-3">
+        Choose how to continue
       </div>
+      
+      <button 
+        onClick={() => setCurrentModal('email')}
+        disabled={isRegistering}
+        className="w-full group flex items-center justify-between px-4 py-3 rounded-xl
+          bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20
+          transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        <div className="flex items-center gap-3">
+          <Mail size={20} className="text-white/70" />
+          <div className="text-left">
+            <div className="font-medium text-white">Continue with Email</div>
+            <div className="text-sm text-white/50">Using your email address</div>
+          </div>
+        </div>
+        <div className="text-white/30 group-hover:text-white/70 transition-colors duration-200">→</div>
+      </button>
+      
+      <button 
+        onClick={() => setCurrentModal('phone')}
+        disabled={isRegistering}
+        className="w-full group flex items-center justify-between px-4 py-3 rounded-xl
+          bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20
+          transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        <div className="flex items-center gap-3">
+          <MessageCircle size={20} className="text-white/70" />
+          <div className="text-left">
+            <div className="font-medium text-white">Continue with Phone</div>
+            <div className="text-sm text-white/50">Using your phone number</div>
+          </div>
+        </div>
+        <div className="text-white/30 group-hover:text-white/70 transition-colors duration-200">→</div>
+      </button>
+
+      <div className="text-sm text-white/40 text-center mt-6">
+        By continuing, you agree to our Terms of Service and Privacy Policy
+      </div>
+
+      {/* Modals */}
+      {currentModal === 'email' && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <RegisterModal
+            onSubmit={handleRegisterSubmit}
+            onClose={handleModalClose}
+          />
+        </div>
+      )}
+
+      {currentModal === 'phone' && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <PhoneVerificationSteps
+            onBack={handleModalClose}
+            onComplete={handlePhoneRegistrationComplete}
+          />
+        </div>
+      )}
     </div>
   );
 };
 
-export default VerificationRoute;
+export default AuthFlow;

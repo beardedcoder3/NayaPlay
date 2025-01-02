@@ -177,10 +177,16 @@ app.post('/api/generate-verification', async (req, res) => {
   console.log('Generate verification request:', req.body);
   const { email, userId, username } = req.body;
   
+  if (!email || !userId || !username) {
+    console.error('Missing required fields:', { email, userId, username });
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+  
   try {
     const verificationCode = generateVerificationCode();
-    console.log('Generated code for user:', { userId, code: verificationCode });
+    console.log('Generated code for user:', { userId, email, code: verificationCode });
 
+    // Save to Firestore first
     await firebaseAdmin.firestore()
       .collection('verificationCodes')
       .doc(userId)
@@ -192,7 +198,8 @@ app.post('/api/generate-verification', async (req, res) => {
         expiresAt: new Date(Date.now() + 10 * 60 * 1000)
       });
 
-    const info = await transporter.sendMail({
+    // Send email
+    const emailInfo = await transporter.sendMail({
       from: '"NayaPlay" <noreply@nayaplay.co>',
       to: email,
       subject: 'Verify Your NayaPlay Account',
@@ -209,75 +216,22 @@ app.post('/api/generate-verification', async (req, res) => {
       `
     });
 
-    console.log('Verification email sent:', info.messageId);
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Error generating verification:', error);
-    res.status(500).json({ error: 'Failed to send verification email' });
-  }
-});
-
-// Verify Code Endpoint
-app.post('/api/verify-code', async (req, res) => {
-  console.log('Verify code request:', req.body);
-  const { code, userId } = req.body;
-
-  if (!code || !userId) {
-    return res.status(400).json({ 
-      success: false,
-      error: 'Missing required fields' 
+    console.log('Verification email sent successfully:', {
+      messageId: emailInfo.messageId,
+      to: email,
+      code: verificationCode
     });
-  }
 
-  try {
-    const docRef = await firebaseAdmin.firestore()
-      .collection('verificationCodes')
-      .doc(userId)
-      .get();
-
-    if (!docRef.exists) {
-      return res.status(400).json({ 
-        success: false,
-        error: 'Invalid verification code' 
-      });
-    }
-
-    const data = docRef.data();
-    
-    if (data.code !== code) {
-      return res.status(400).json({ 
-        success: false,
-        error: 'Invalid verification code' 
-      });
-    }
-
-    if (Date.now() > data.expiresAt.toDate().getTime()) {
-      return res.status(400).json({ 
-        success: false,
-        error: 'Verification code expired' 
-      });
-    }
-
-    await firebaseAdmin.firestore()
-      .collection('users')
-      .doc(userId)
-      .update({
-        emailVerified: true,
-        verifiedAt: firebaseAdmin.firestore.FieldValue.serverTimestamp()
-      });
-
-    await docRef.ref.delete();
-
-    return res.json({ 
+    res.json({ 
       success: true,
-      message: 'Verification successful' 
+      message: 'Verification email sent successfully'
     });
-    
+
   } catch (error) {
-    console.error('Verification error:', error);
-    return res.status(500).json({ 
-      success: false,
-      error: 'Failed to verify code' 
+    console.error('Error in verification process:', error);
+    res.status(500).json({ 
+      error: 'Failed to send verification email',
+      details: error.message 
     });
   }
 });
