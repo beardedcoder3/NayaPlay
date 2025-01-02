@@ -236,10 +236,14 @@ function AppContent() {
           {/* Verification Route */}
        
 
-       <Route 
+          <Route 
   path="/verify-email" 
   element={
-    <VerificationRoute />
+    !sessionStorage.getItem('registrationInProgress') ? (
+      <Navigate to="/" replace />
+    ) : (
+      <VerificationRoute />
+    )
   } 
 />
           {/* Protected Routes with verification check */}
