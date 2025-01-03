@@ -13,14 +13,15 @@ const VerificationRoute = () => {
  
   // Single guard check on mount
   useEffect(() => {
+    const isRegistering = sessionStorage.getItem('registrationInProgress');
     const userEmail = sessionStorage.getItem('userEmail');
     const userId = sessionStorage.getItem('userId');
-    const isRegistering = sessionStorage.getItem('registrationInProgress');
-  
-    if (!userEmail || !userId || !isRegistering) {
-      navigate('/', { replace: true });
+
+    if (!isRegistering || !userEmail || !userId) {
+      window.location.replace('/');
+      return;
     }
-  }, [navigate]);
+  }, []);
  
   const handleChange = (element, index) => {
     if (isNaN(element.value)) return;
@@ -36,6 +37,7 @@ const VerificationRoute = () => {
     }
   };
  
+
   const handleSubmit = async () => {
     const verificationCode = code.join('');
     const userId = sessionStorage.getItem('userId');
@@ -47,46 +49,32 @@ const VerificationRoute = () => {
       const response = await fetch(`${process.env.REACT_APP_API_URL}/api/verify-code`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'  // Add this line
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           code: verificationCode,
           userId: userId
         })
       });
-  
-      // Parse response carefully
-      const text = await response.text();
-      let data;
-      try {
-        data = JSON.parse(text);
-      } catch (e) {
-        console.error('Failed to parse response:', text);
-        throw new Error('Invalid server response');
-      }
-  
+
       if (!response.ok) {
-        throw new Error(data.error || 'Verification failed');
+        throw new Error('Verification failed');
       }
-  
+
       // Update user document
-      if (userId) {
-        const userRef = doc(db, 'users', userId);
-        await updateDoc(userRef, {
-          emailVerified: true,
-          lastActive: serverTimestamp(),
-          verifiedAt: serverTimestamp()
-        });
-      }
-  
+      const userRef = doc(db, 'users', userId);
+      await updateDoc(userRef, {
+        emailVerified: true,
+        verifiedAt: serverTimestamp()
+      });
+
       // Clear storage and redirect
       sessionStorage.clear();
-      window.location.href = '/app';
-  
+      window.location.replace('/app');
+
     } catch (error) {
       console.error('Verification error:', error);
-      setError(error.message || 'Failed to verify code');
+      setError(error.message || 'Invalid verification code');
     } finally {
       setLoading(false);
     }

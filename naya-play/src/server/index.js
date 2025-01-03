@@ -5,7 +5,17 @@ const firebaseAdmin = require('firebase-admin');
 const nodemailer = require('nodemailer');
 const cors = require('cors');
 const path = require('path');
+const { SNSClient, PublishCommand } = require("@aws-sdk/client-sns");
 require('dotenv').config();
+
+// Initialize AWS SNS Client
+const snsClient = new SNSClient({
+  region: process.env.AWS_REGION,
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  }
+});
 
 // Initialize Firebase Admin with environment variables
 const serviceAccount = {
@@ -39,7 +49,6 @@ const io = new Server(httpServer, {
 });
 
 // Middleware
-// In server/index.js
 app.use(cors({
   origin: ['http://localhost:3000', 'https://nayaplay.co', 'https://www.nayaplay.co', 'https://dev.d3gbazqn8zu3vg.amplifyapp.com'],
   methods: ['GET', 'POST', 'OPTIONS'],
@@ -172,7 +181,7 @@ io.on('connection', (socket) => {
 });
 
 // API Routes
-// Generate Verification Code Endpoint
+// Generate Email Verification Code Endpoint
 app.post('/api/generate-verification', async (req, res) => {
   console.log('Generate verification request:', req.body);
   const { email, userId, username } = req.body;
@@ -217,7 +226,7 @@ app.post('/api/generate-verification', async (req, res) => {
   }
 });
 
-// Verify Code Endpoint
+// Email Verify Code Endpoint
 app.post('/api/verify-code', async (req, res) => {
   console.log('Verify code request:', req.body);
   const { code, userId } = req.body;
@@ -258,7 +267,6 @@ app.post('/api/verify-code', async (req, res) => {
       });
     }
 
-    // Update user document to mark as verified
     await firebaseAdmin.firestore()
       .collection('users')
       .doc(userId)
@@ -267,10 +275,8 @@ app.post('/api/verify-code', async (req, res) => {
         verifiedAt: firebaseAdmin.firestore.FieldValue.serverTimestamp()
       });
 
-    // Delete the verification code after successful verification
     await docRef.ref.delete();
 
-    // Send success response
     return res.json({ 
       success: true,
       message: 'Verification successful' 
@@ -285,6 +291,108 @@ app.post('/api/verify-code', async (req, res) => {
     });
   }
 });
+
+// Phone Verification Endpoints
+app.post('/api/send-phone-verification', async (req, res) => {
+  console.log('Phone verification request:', req.body);
+  const { phoneNumber } = req.body;
+  
+  try {
+    // Generate OTP
+    const verificationCode = generateVerificationCode();
+    
+    // Store OTP in Firebase
+    await firebaseAdmin.firestore()
+      .collection('phoneVerifications')
+      .doc(phoneNumber)
+      .set({
+        code: verificationCode,
+        createdAt: firebaseAdmin.firestore.FieldValue.serverTimestamp(),
+        expiresAt: new Date(Date.now() + 5 * 60 * 1000) // 5 minutes expiry
+      });
+
+    // Format phone number to E.164 format
+    const formattedNumber = phoneNumber.startsWith('+') ? phoneNumber : `+${phoneNumber}`;
+
+    // Prepare the message
+    const message = `Your NayaPlay verification code is: ${verificationCode}\n\nThis code will expire in 5 minutes.\n\nDo not share this code with anyone.`;
+
+    // Send SMS using AWS SNS
+    const command = new PublishCommand({
+      Message: message,
+      PhoneNumber: formattedNumber,
+      MessageAttributes: {
+        'AWS.SNS.SMS.SenderID': {
+          DataType: 'String',
+          StringValue: 'NAYAPLAY'
+        },
+        'AWS.SNS.SMS.SMSType': {
+          DataType: 'String',
+          StringValue: 'Transactional'
+        }
+      }
+    });
+
+    const response = await snsClient.send(command);
+    console.log('AWS SNS Response:', response);
+    
+    res.json({ 
+      success: true, 
+      messageId: response.MessageId 
+    });
+  } catch (error) {
+    console.error('AWS SNS error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+app.post('/api/verify-phone-code', async (req, res) => {
+  const { phoneNumber, code } = req.body;
+  
+  try {
+    const docRef = await firebaseAdmin.firestore()
+      .collection('phoneVerifications')
+      .doc(phoneNumber)
+      .get();
+
+    if (!docRef.exists) {
+      return res.json({ 
+        success: false,
+        verified: false,
+        error: 'Invalid or expired code'
+      });
+    }
+
+    const data = docRef.data();
+    const isValid = data.code === code && new Date() < data.expiresAt.toDate();
+
+    if (isValid) {
+      // Delete the verification code after successful verification
+      await docRef.ref.delete();
+
+      res.json({ 
+        success: true,
+        verified: true
+      });
+    } else {
+      res.json({ 
+        success: false,
+        verified: false,
+        error: 'Invalid or expired code'
+      });
+    }
+  } catch (error) {
+    console.error('Code verification error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
 // Crypto Webhook Endpoint
 app.post('/api/crypto-webhook', async (req, res) => {
   const { payment_id, payment_status, pay_amount, actually_paid, outcome_amount } = req.body;
@@ -332,115 +440,12 @@ app.get('/test', (req, res) => {
       host: process.env.ZOHO_MAIL_HOST,
       port: process.env.ZOHO_MAIL_PORT,
       user: process.env.ZOHO_MAIL_USER
+    },
+    awsConfig: {
+      region: process.env.AWS_REGION
     }
   });
 });
-
-
-const twilio = require('twilio');
-const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-
-// Add these new routes after your existing routes
-
-// Send OTP
-// Send OTP
-app.post('/api/send-phone-verification', async (req, res) => {
-  const { phoneNumber } = req.body;
-  
-  try {
-    const verification = await client.verify.v2
-      .services(process.env.TWILIO_VERIFY_SERVICE_SID)
-      .verifications
-      .create({
-        to: phoneNumber,
-        channel: 'sms',
-        channelConfiguration: {
-          template: 'Your NayaPlay verification code is: {code}\n\nThis code will expire in 5 minutes.\n\nDo not share this code with anyone.'
-        }
-      });
-
-    res.json({ success: true, status: verification.status });
-  } catch (error) {
-    console.error('Error:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-app.post('/api/verify-phone-code', async (req, res) => {
-  const { phoneNumber, code } = req.body;
-  
-  try {
-    const verification = await client.verify.v2
-      .services(process.env.TWILIO_VERIFY_SERVICE_SID)
-      .verificationChecks
-      .create({
-        to: phoneNumber,
-        code: code
-      });
-
-    res.json({ 
-      success: true,
-      verified: verification.status === 'approved'
-    });
-  } catch (error) {
-    console.error('Code verification error:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: error.message 
-    });
-  }
-});
-
-
-// Add these after your other routes but before the server start code
-app.post('/api/send-phone-verification', async (req, res) => {
-  console.log('Phone verification request:', req.body);
-  const { phoneNumber } = req.body;
-  
-  try {
-    // Format phone number to E.164 format for Twilio
-    const formattedNumber = phoneNumber.startsWith('+') ? phoneNumber : `+${phoneNumber}`;
-    
-    const verification = await client.verify.v2
-      .services(process.env.TWILIO_VERIFY_SERVICE_SID)
-      .verifications
-      .create({
-        to: formattedNumber,
-        channel: 'sms'
-      });
-
-    console.log('Twilio verification response:', verification);
-    res.json({ success: true, status: verification.status });
-  } catch (error) {
-    console.error('Twilio error:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-app.post('/api/verify-phone-code', async (req, res) => {
-  const { phoneNumber, code } = req.body;
-  
-  try {
-    const verification = await client.verify.v2
-      .services(process.env.TWILIO_VERIFY_SERVICE_SID)
-      .verificationChecks.create({
-        to: phoneNumber,
-        code: code
-      });
-
-    res.json({ 
-      success: true,
-      verified: verification.status === 'approved' 
-    });
-  } catch (error) {
-    res.status(500).json({ 
-      success: false, 
-      error: error.message 
-    });
-  }
-});
-
-
 
 // Start first game
 startNewGame();
@@ -454,4 +459,5 @@ httpServer.listen(PORT, () => {
     port: process.env.ZOHO_MAIL_PORT,
     user: process.env.ZOHO_MAIL_USER
   });
+  console.log('AWS SNS configuration loaded for region:', process.env.AWS_REGION);
 });

@@ -18,11 +18,18 @@ const AuthFlow = () => {
       setIsRegistering(true);
       sessionStorage.clear();
   
-      // Create user first
+      // Set flags BEFORE any async operations
+      sessionStorage.setItem('registrationInProgress', 'true');
+      
+      // Create user
       const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
       const user = userCredential.user;
   
-      // Create user document first
+      // Store user info
+      sessionStorage.setItem('userId', user.uid);
+      sessionStorage.setItem('userEmail', formData.email);
+  
+      // Create user document
       await setDoc(doc(db, 'users', user.uid), {
         email: formData.email,
         username: formData.username.toLowerCase(),
@@ -36,7 +43,7 @@ const AuthFlow = () => {
       });
   
       // Send verification email
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/generate-verification`, {
+      await fetch(`${process.env.REACT_APP_API_URL}/api/generate-verification`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -48,20 +55,9 @@ const AuthFlow = () => {
         })
       });
   
-      if (!response.ok) {
-        throw new Error('Failed to send verification email');
-      }
-  
-      // Set session storage AFTER everything succeeds
-      sessionStorage.setItem('registrationInProgress', 'true');
-      sessionStorage.setItem('userId', user.uid);
-      sessionStorage.setItem('userEmail', formData.email);
-  
-      // Close modal first
+      // Close modal and redirect
       setCurrentModal(null);
-  
-      // Use replace to avoid history issues
-      navigate('/verify-email', { replace: true });
+      window.location.replace('/verify-email');
   
     } catch (error) {
       sessionStorage.clear();
@@ -70,7 +66,6 @@ const AuthFlow = () => {
     }
   };
 
-  
   const handlePhoneRegistrationComplete = async (data) => {
     try {
       setIsRegistering(true);

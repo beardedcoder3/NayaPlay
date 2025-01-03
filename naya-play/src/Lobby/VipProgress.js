@@ -1,8 +1,7 @@
-import React from 'react';
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Star, Trophy, Crown, Shield, Diamond, Award } from 'lucide-react';
 import { auth, db } from '../firebase';
-import { doc, getDoc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot } from 'firebase/firestore';
 
 const vipLevels = {
   none: { 
@@ -72,7 +71,7 @@ const VIPBanner = () => {
     const unsubscribe = onSnapshot(doc(db, 'users', auth.currentUser.uid), (doc) => {
       if (doc.exists()) {
         const data = doc.data();
-        const wagered = data.stats?.wagered || 0;
+        const wagered = data.totalWagered || 0;
 
         let vipLevel = 'none';
         let progress = 0;
@@ -106,11 +105,52 @@ const VIPBanner = () => {
           nextLevelWager = 1000;
         }
 
+        // Only change: Updated date formatting
+        const formatDate = (dateStr) => {
+          if (!dateStr) return 'Unknown';
+          
+          try {
+            // For debugging
+            console.log('Received date string:', dateStr);
+            
+            if (typeof dateStr === 'string') {
+              // Handle the exact format from your Firebase
+              const match = dateStr.match(/(\w+)\s+\d+,\s+(\d{4})/);
+              if (match) {
+                const [_, month, year] = match;
+                return `${month} ${year}`;
+              }
+            }
+            
+            // If it's a timestamp object
+            if (dateStr?.seconds) {
+              const date = new Date(dateStr.seconds * 1000);
+              return date.toLocaleDateString('en-US', { 
+                month: 'long',
+                year: 'numeric'
+              });
+            }
+            
+            // Last resort: try direct Date parsing
+            const date = new Date(dateStr);
+            if (!isNaN(date.getTime())) {
+              return date.toLocaleDateString('en-US', { 
+                month: 'long',
+                year: 'numeric'
+              });
+            }
+            
+            return 'Unknown';
+          } catch (error) {
+            console.error('Date parsing error:', error);
+            return 'Unknown';
+          }
+        };
         setUserData({
-          username: data.username || 'Player',
+          username: data.displayUsername || 'Player',
           vipLevel,
           progress: Math.min(Math.round(progress), 100),
-          joinDate: new Date(data.createdAt).getFullYear(),
+          joinDate: formatDate(data.createdAt),
           currentLevelWager,
           nextLevelWager,
           totalWagered: wagered
@@ -128,10 +168,9 @@ const VIPBanner = () => {
   return (
     <div className="relative bg-[#0f1923] overflow-hidden">
       {/* Background Effects */}
-    {/* Background Effects */}
-<div className="absolute inset-0 bg-gradient-to-r from-[#0072ce]/5 via-[#0088ff]/5 to-[#00a6ff]/5" />
-<div className={`absolute inset-0 bg-gradient-to-r ${currentLevel.bgGlow}`} />
-<div className="absolute inset-0 opacity-20 mix-blend-soft-light bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iMzAwIj4NCjxmaWx0ZXIgaWQ9ImEiIHg9IjAiIHk9IjAiPg0KPGZlVHVyYnVsZW5jZSB0eXBlPSJmcmFjdGFsTm9pc2UiIGJhc2VGcmVxdWVuY3k9Ii43NSIgc3RpdGNoVGlsZXM9InN0aXRjaCIvPg0KPC9maWx0ZXI+DQo8cmVjdCB3aWR0aD0iMzAwIiBoZWlnaHQ9IjMwMCIgZmlsdGVyPSJ1cmwoI2EpIiBvcGFjaXR5PSIwLjA1Ii8+DQo8L3N2Zz4=')]" />
+      <div className="absolute inset-0 bg-gradient-to-r from-[#0072ce]/5 via-[#0088ff]/5 to-[#00a6ff]/5" />
+      <div className={`absolute inset-0 bg-gradient-to-r ${currentLevel.bgGlow}`} />
+      <div className="absolute inset-0 opacity-20 mix-blend-soft-light bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iMzAwIj4NCjxmaWx0ZXIgaWQ9ImEiIHg9IjAiIHk9IjAiPg0KPGZlVHVyYnVsZW5jZSB0eXBlPSJmcmFjdGFsTm9pc2UiIGJhc2VGcmVxdWVuY3k9Ii43NSIgc3RpdGNoVGlsZXM9InN0aXRjaCIvPg0KPC9maWx0ZXI+DQo8cmVjdCB3aWR0aD0iMzAwIiBoZWlnaHQ9IjMwMCIgZmlsdGVyPSJ1cmwoI2EpIiBvcGFjaXR5PSIwLjA1Ii8+DQo8L3N2Zz4=')]" />
       
       <div className="max-w-7xl mx-auto px-6">
         <div className="py-8">

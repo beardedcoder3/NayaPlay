@@ -235,7 +235,6 @@ function AppContent() {
 
           {/* Verification Route */}
        
-
           <Route 
   path="/verify-email" 
   element={
