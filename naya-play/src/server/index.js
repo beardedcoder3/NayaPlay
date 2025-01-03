@@ -63,17 +63,11 @@ const io = new Server(httpServer, {
 // Middleware
 // Update your CORS configuration
 app.use(cors({
-  origin: [
-    'http://localhost:3000',
-    'http://localhost:3002',
-    'https://nayaplay.co', 
-    'https://www.nayaplay.co', 
-    'https://dev.d3gbazqn8zu3vg.amplifyapp.com'
-  ],
-  methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
-  credentials: true
+  origin: '*',
+  methods: ['GET', 'POST'],
+  allowedHeaders: ['Content-Type']
 }));
+
 
 // Email Configuration
 const transporter = nodemailer.createTransport({
@@ -318,7 +312,7 @@ app.post('/api/send-phone-verification', async (req, res) => {
       error: 'Phone number is required'
     });
   }
- 
+
   const { phoneNumber } = req.body;
   console.log('Processing phone number:', phoneNumber);
   
@@ -333,10 +327,10 @@ app.post('/api/send-phone-verification', async (req, res) => {
         createdAt: firebaseAdmin.firestore.FieldValue.serverTimestamp(),
         expiresAt: new Date(Date.now() + 5 * 60 * 1000)
       });
- 
+
     const formattedNumber = phoneNumber.startsWith('+') ? phoneNumber : `+${phoneNumber}`;
     const message = `Your NayaPlay verification code is: ${verificationCode}\n\nThis code will expire in 5 minutes.\n\nDo not share this code with anyone.`;
- 
+
     const command = new PublishCommand({
       Message: message,
       PhoneNumber: formattedNumber,
@@ -351,7 +345,7 @@ app.post('/api/send-phone-verification', async (req, res) => {
         }
       }
     });
- 
+
     const response = await snsClient.send(command);
     console.log('AWS SNS Response:', response);
     
@@ -366,7 +360,7 @@ app.post('/api/send-phone-verification', async (req, res) => {
       error: error.message 
     });
   }
- });
+});
 
 app.post('/api/verify-phone-code', async (req, res) => {
   const { phoneNumber, code } = req.body;
