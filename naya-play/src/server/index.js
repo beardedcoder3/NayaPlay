@@ -6,16 +6,23 @@ const nodemailer = require('nodemailer');
 const cors = require('cors');
 const path = require('path');
 const { SNSClient, PublishCommand } = require("@aws-sdk/client-sns");
+
+
 require('dotenv').config();
 
 // Initialize AWS SNS Client
 const snsClient = new SNSClient({
-  region: process.env.AWS_REGION,
+  region: "eu-north-1",
   credentials: {
     accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
   }
 });
+
+// Verify credentials are loaded
+console.log('AWS Region:', process.env.AWS_REGION);
+console.log('AWS Access Key ID:', process.env.AWS_ACCESS_KEY_ID?.slice(0, 5) + '...');
+
 
 // Initialize Firebase Admin with environment variables
 const serviceAccount = {
