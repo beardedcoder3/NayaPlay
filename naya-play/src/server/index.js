@@ -42,20 +42,33 @@ const httpServer = createServer(app);
 // Socket.IO setup
 const io = new Server(httpServer, {
   cors: {
-    origin: ['https://dev.d3gbazqn8zu3vg.amplifyapp.com', 'http://localhost:3002', 'https://nayaplay.co', 'https://www.nayaplay.co'],
-    credentials: true,
-    methods: ['GET', 'POST']
+    origin: [
+      'http://localhost:3000',
+      'http://localhost:3002',
+      'https://nayaplay.co', 
+      'https://www.nayaplay.co', 
+      'https://dev.d3gbazqn8zu3vg.amplifyapp.com'
+    ],
+    methods: ['GET', 'POST'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true
   }
 });
 
 // Middleware
 // Update your CORS configuration
 app.use(cors({
-  origin: ['http://localhost:3000', 'https://nayaplay.co', 'https://www.nayaplay.co', 'https://dev.d3gbazqn8zu3vg.amplifyapp.com'],
+  origin: [
+    'http://localhost:3000',
+    'http://localhost:3002',
+    'https://nayaplay.co', 
+    'https://www.nayaplay.co', 
+    'https://dev.d3gbazqn8zu3vg.amplifyapp.com'
+  ],
   methods: ['GET', 'POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
   credentials: true,
-  maxAge: 86400 // cache preflight requests for 1 day
+  exposedHeaders: ['Access-Control-Allow-Origin', 'Access-Control-Allow-Credentials']
 }));
 
 // Email Configuration
