@@ -103,10 +103,12 @@ const handleSendOTP = async (e) => {
         'Content-Type': 'application/json',
         'Accept': 'application/json'
       },
+      credentials: 'include', // Add this line
       body: JSON.stringify({ 
         phoneNumber: formattedNumber
       })
     });
+
 
     // Log the raw response for debugging
     console.log('Response status:', response.status);

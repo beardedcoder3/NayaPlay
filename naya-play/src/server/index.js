@@ -49,15 +49,14 @@ const io = new Server(httpServer, {
 });
 
 // Middleware
+// Update your CORS configuration
 app.use(cors({
   origin: ['http://localhost:3000', 'https://nayaplay.co', 'https://www.nayaplay.co', 'https://dev.d3gbazqn8zu3vg.amplifyapp.com'],
   methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
   credentials: true,
-  exposedHeaders: ['Access-Control-Allow-Credentials']
+  maxAge: 86400 // cache preflight requests for 1 day
 }));
-
-app.use(express.json());
 
 // Email Configuration
 const transporter = nodemailer.createTransport({
