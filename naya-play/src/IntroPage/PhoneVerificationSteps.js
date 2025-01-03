@@ -83,34 +83,45 @@ const PhoneVerificationSteps = ({ onBack, onComplete }) => {
  };
 
 // In your handleSendOTP function, modify it like this:
+// Update your handleSendOTP function to handle AWS specific responses
 const handleSendOTP = async (e) => {
   e.preventDefault();
   setLoading(true);
   setError('');
   
   try {
-    // Remove everything except digits and ensure it has the + prefix
     const formattedNumber = phoneData.phoneNumber.startsWith('+') ? 
       phoneData.phoneNumber : 
       `+${phoneData.phoneNumber.replace(/\D/g, '')}`;
 
-    console.log('Sending verification to:', formattedNumber); // For debugging
+    console.log('Making request to:', `${process.env.REACT_APP_API_URL}/api/send-phone-verification`);
+    console.log('With phone number:', formattedNumber);
 
     const response = await fetch(`${process.env.REACT_APP_API_URL}/api/send-phone-verification`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
       body: JSON.stringify({ 
         phoneNumber: formattedNumber
       })
     });
 
+    // Log the raw response for debugging
+    console.log('Response status:', response.status);
+    const data = await response.json();
+    console.log('Response data:', data);
+
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      throw new Error(data.error || 'Failed to send verification code');
     }
 
-    const data = await response.json();
-    if (data.success) setStep('otp');
-    else throw new Error(data.error || 'Failed to send verification code');
+    if (data.success) {
+      setStep('otp');
+    } else {
+      throw new Error(data.error || 'Failed to send verification code');
+    }
   } catch (error) {
     console.error('Error:', error);
     setError(error.message || 'Failed to send verification code');
@@ -118,6 +129,7 @@ const handleSendOTP = async (e) => {
     setLoading(false);
   }
 };
+
 
 const handleVerifyOTP = async (e) => {
   e.preventDefault();
