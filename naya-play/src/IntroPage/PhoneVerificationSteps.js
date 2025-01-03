@@ -93,32 +93,31 @@ const handleSendOTP = async (e) => {
     const formattedNumber = phoneData.phoneNumber.startsWith('+') ? 
       phoneData.phoneNumber : 
       `+${phoneData.phoneNumber.replace(/\D/g, '')}`;
-
+ 
     console.log('Making request to:', `${process.env.REACT_APP_API_URL}/api/send-phone-verification`);
     console.log('With phone number:', formattedNumber);
-
+ 
     const response = await fetch(`${process.env.REACT_APP_API_URL}/api/send-phone-verification`, {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
         'Accept': 'application/json'
       },
-      credentials: 'include', // Add this line
+      mode: 'cors', // Add this line
       body: JSON.stringify({ 
         phoneNumber: formattedNumber
       })
     });
-
-
+ 
     // Log the raw response for debugging
     console.log('Response status:', response.status);
     const data = await response.json();
     console.log('Response data:', data);
-
+ 
     if (!response.ok) {
       throw new Error(data.error || 'Failed to send verification code');
     }
-
+ 
     if (data.success) {
       setStep('otp');
     } else {
@@ -130,9 +129,8 @@ const handleSendOTP = async (e) => {
   } finally {
     setLoading(false);
   }
-};
-
-
+ };
+ 
 const handleVerifyOTP = async (e) => {
   e.preventDefault();
   setLoading(true);

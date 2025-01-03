@@ -39,6 +39,11 @@ firebaseAdmin.initializeApp({
 const app = express();
 const httpServer = createServer(app);
 
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+
+
 // Socket.IO setup
 const io = new Server(httpServer, {
   cors: {
@@ -67,8 +72,7 @@ app.use(cors({
   ],
   methods: ['GET', 'POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
-  credentials: true,
-  exposedHeaders: ['Access-Control-Allow-Origin', 'Access-Control-Allow-Credentials']
+  credentials: true
 }));
 
 // Email Configuration
@@ -306,30 +310,33 @@ app.post('/api/verify-code', async (req, res) => {
 
 // Phone Verification Endpoints
 app.post('/api/send-phone-verification', async (req, res) => {
-  console.log('Phone verification request:', req.body);
+  console.log('Received request body:', req.body);
+  
+  if (!req.body || !req.body.phoneNumber) {
+    return res.status(400).json({
+      success: false, 
+      error: 'Phone number is required'
+    });
+  }
+ 
   const { phoneNumber } = req.body;
+  console.log('Processing phone number:', phoneNumber);
   
   try {
-    // Generate OTP
     const verificationCode = generateVerificationCode();
     
-    // Store OTP in Firebase
     await firebaseAdmin.firestore()
       .collection('phoneVerifications')
       .doc(phoneNumber)
       .set({
         code: verificationCode,
         createdAt: firebaseAdmin.firestore.FieldValue.serverTimestamp(),
-        expiresAt: new Date(Date.now() + 5 * 60 * 1000) // 5 minutes expiry
+        expiresAt: new Date(Date.now() + 5 * 60 * 1000)
       });
-
-    // Format phone number to E.164 format
+ 
     const formattedNumber = phoneNumber.startsWith('+') ? phoneNumber : `+${phoneNumber}`;
-
-    // Prepare the message
     const message = `Your NayaPlay verification code is: ${verificationCode}\n\nThis code will expire in 5 minutes.\n\nDo not share this code with anyone.`;
-
-    // Send SMS using AWS SNS
+ 
     const command = new PublishCommand({
       Message: message,
       PhoneNumber: formattedNumber,
@@ -344,7 +351,7 @@ app.post('/api/send-phone-verification', async (req, res) => {
         }
       }
     });
-
+ 
     const response = await snsClient.send(command);
     console.log('AWS SNS Response:', response);
     
@@ -359,7 +366,7 @@ app.post('/api/send-phone-verification', async (req, res) => {
       error: error.message 
     });
   }
-});
+ });
 
 app.post('/api/verify-phone-code', async (req, res) => {
   const { phoneNumber, code } = req.body;
