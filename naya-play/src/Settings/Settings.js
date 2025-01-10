@@ -15,6 +15,9 @@ import {
 import { doc, getDoc, updateDoc, query, collection, where, getDocs } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import { runTransaction, increment, serverTimestamp } from 'firebase/firestore';
+
+import { updateEmail } from 'firebase/auth';
+
 // Base Input Component - Styled to match LiveBetLobby
 const InputField = ({ 
   label, 
@@ -238,30 +241,41 @@ const SettingsSidebar = ({ currentSection }) => {
   );
 };
 
+
 export const GeneralSettings = () => {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const [phone, setPhone] = useState('');
   const [countryCode, setCountryCode] = useState('+380');
   const [loading, setLoading] = useState(false);
   const [userData, setUserData] = useState(null);
+  const [newEmail, setNewEmail] = useState('');
+  const [showVerification, setShowVerification] = useState(false);
+  const [verificationCode, setVerificationCode] = useState('');
+  const [emailError, setEmailError] = useState('');
+  const [verificationError, setVerificationError] = useState('');
+  const [password, setPassword] = useState('');
+  const [showReauth, setShowReauth] = useState(false);
 
   useEffect(() => {
     const fetchUserData = async () => {
       if (user) {
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
-        if (userDoc.exists()) {
-          setUserData(userDoc.data());
-          setPhone(userDoc.data().phone || '');
-          setCountryCode(userDoc.data().countryCode || '+380');
+        try {
+          // Refresh user data to get latest verification status
+          await refreshUser();
+          
+          const userDoc = await getDoc(doc(db, 'users', user.uid));
+          if (userDoc.exists()) {
+            setUserData(userDoc.data());
+            setPhone(userDoc.data().phone || '');
+            setCountryCode(userDoc.data().countryCode || '+380');
+          }
+        } catch (error) {
+          console.error('Error fetching user data:', error);
         }
       }
     };
     fetchUserData();
-  }, [user]);
-
-
- 
-
+  }, [user, refreshUser]);
 
   const handlePhoneUpdate = async () => {
     try {
@@ -279,12 +293,100 @@ export const GeneralSettings = () => {
     }
   };
 
-  const handleResendVerification = async () => {
+  const handleEmailChange = async () => {
+    if (!newEmail || newEmail === user?.email) return;
+    
+    setLoading(true);
+    setEmailError('');
     try {
-      await sendEmailVerification(user);
-      alert('Verification email sent! Please check your inbox.');
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/generate-verification`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: newEmail,
+          userId: user.uid,
+          username: userData?.username || ''
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to send verification code');
+      }
+
+      setShowVerification(true);
     } catch (error) {
-      alert('Error sending verification email. Please try again later.');
+      setEmailError('Failed to send verification code. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerify = async () => {
+    if (!verificationCode) {
+      setVerificationError('Please enter verification code');
+      return;
+    }
+
+    setLoading(true);
+    setVerificationError('');
+
+    try {
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/verify-code`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          code: verificationCode,
+          userId: user.uid
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setShowVerification(false);
+        setShowReauth(true);
+      } else {
+        setVerificationError(data.error || 'Invalid verification code');
+      }
+    } catch (error) {
+      setVerificationError('Failed to verify code. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleReauth = async () => {
+    if (!password) {
+      setVerificationError('Please enter your password');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const credential = EmailAuthProvider.credential(user.email, password);
+      await reauthenticateWithCredential(user, credential);
+      
+      await updateEmail(auth.currentUser, newEmail);
+      await updateDoc(doc(db, 'users', user.uid), {
+        email: newEmail
+      });
+
+      // Refresh user data after email update
+      await refreshUser();
+
+      setShowReauth(false);
+      setNewEmail('');
+      setPassword('');
+      setVerificationCode('');
+      alert('Email updated successfully!');
+    } catch (error) {
+      setVerificationError('Invalid password or error updating email. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -292,28 +394,110 @@ export const GeneralSettings = () => {
     <div className="space-y-8">
       <Card title="Email Settings" icon={Mail}>
         <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <InputField
-              label="Email Address"
-              value={user?.email}
-              disabled
-              icon={Mail}
-              className="flex-1 mr-4"
-            />
-            {user?.emailVerified ? (
-              <Badge variant="success" className="h-fit mt-8">Verified</Badge>
-            ) : (
-              <Button 
-                variant="secondary" 
-                onClick={handleResendVerification}
-                className="mt-8"
-              >
-                Resend Verification
-              </Button>
-            )}
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-gray-400">Current Email</label>
+            <div className="flex items-center space-x-2">
+              <p className="text-white">{user?.email}</p>
+              <Badge variant={user?.emailVerified ? "success" : "warning"}>
+                {user?.emailVerified ? "Verified" : "Unverified"}
+              </Badge>
+            </div>
           </div>
+
+          <InputField
+            label="New Email Address"
+            type="email"
+            value={newEmail}
+            onChange={(e) => setNewEmail(e.target.value)}
+            icon={Mail}
+            placeholder="Enter new email address"
+            error={emailError}
+          />
+
+          <Button
+            onClick={handleEmailChange}
+            loading={loading}
+            disabled={!newEmail || loading || newEmail === user?.email}
+            icon={Check}
+          >
+            Change Email
+          </Button>
         </div>
       </Card>
+
+      <Modal 
+        isOpen={showVerification} 
+        onClose={() => {
+          setShowVerification(false);
+          setVerificationCode('');
+          setVerificationError('');
+        }}
+        title="Verify New Email"
+      >
+        <div className="space-y-6">
+          <div className="text-center">
+            <Mail className="mx-auto h-12 w-12 text-indigo-400" />
+            <h3 className="mt-4 text-lg font-medium text-white">
+              Verify Your New Email
+            </h3>
+            <p className="mt-2 text-sm text-gray-400">
+              We've sent a verification code to {newEmail}.<br/>
+              Please enter the code below to verify your email.
+            </p>
+          </div>
+
+          <InputField
+            value={verificationCode}
+            onChange={(e) => setVerificationCode(e.target.value)}
+            placeholder="Enter verification code"
+            error={verificationError}
+          />
+
+          <Button
+            onClick={handleVerify}
+            loading={loading}
+            className="w-full"
+            disabled={!verificationCode || loading}
+          >
+            Verify Email
+          </Button>
+        </div>
+      </Modal>
+
+      <Modal 
+        isOpen={showReauth} 
+        onClose={() => {
+          setShowReauth(false);
+          setPassword('');
+          setVerificationError('');
+        }}
+        title="Confirm Password"
+      >
+        <div className="space-y-6">
+          <div className="text-center">
+            <p className="mt-2 text-sm text-gray-400">
+              Please enter your current password to confirm the email change.
+            </p>
+          </div>
+
+          <InputField
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Enter your password"
+            error={verificationError}
+          />
+
+          <Button
+            onClick={handleReauth}
+            loading={loading}
+            className="w-full"
+            disabled={!password || loading}
+          >
+            Confirm
+          </Button>
+        </div>
+      </Modal>
 
       <Card title="Phone Number" icon={Phone}>
         <div className="space-y-6">

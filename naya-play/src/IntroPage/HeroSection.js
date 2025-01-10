@@ -1,5 +1,6 @@
 import React from 'react';
 import AuthFlow from './AuthFlow';
+import { Chrome, Facebook } from 'lucide-react';
 
 const HeroSection = () => {
   return (
@@ -12,12 +13,10 @@ const HeroSection = () => {
             <div className="space-y-4">
               <h1 className="text-5xl lg:text-6xl font-bold leading-tight">
                 <span className="bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-400 bg-clip-text text-transparent">
-                An unrivalled online
+                  An unrivalled online
                 </span>
                 <br />
                 <span className="text-white">Casino</span>
-                <br />
-               
               </h1>
             </div>
 
@@ -32,7 +31,7 @@ const HeroSection = () => {
               transform hover:scale-105 transition-transform duration-500
               border border-[#1e90ff]/20 aspect-[3/4]">
               <img 
-                src="https://mediumrare.imgix.net/unauth-header-casino-en.png?w=640&h=961&fit=min&auto=format" 
+               src="https://mediumrare.imgix.net/unauth-header-casino-en.png?w=640&h=961&fit=min&auto=format" 
                 alt="Casino experience" 
                 className="w-full h-full object-cover"
               />
@@ -44,7 +43,7 @@ const HeroSection = () => {
               transform hover:scale-105 transition-transform duration-500
               border border-[#1e90ff]/20 aspect-[3/4]">
               <img 
-                src="https://img.freepik.com/free-photo/spinning-roulette-wheel-blue-flame-jackpot-casino-ultimate-success-generated-by-ai_188544-55617.jpg?t=st=1735650338~exp=1735653938~hmac=a646ae88f5d910f876d7ccf6e81afd48b959cae2d878449ba0355d6514375094&w=1380" 
+                   src="https://img.freepik.com/free-photo/spinning-roulette-wheel-blue-flame-jackpot-casino-ultimate-success-generated-by-ai_188544-55617.jpg?t=st=1735650338~exp=1735653938~hmac=a646ae88f5d910f876d7ccf6e81afd48b959cae2d878449ba0355d6514375094&w=1380" 
                 alt="Sports experience" 
                 className="w-full h-full object-cover"
               />

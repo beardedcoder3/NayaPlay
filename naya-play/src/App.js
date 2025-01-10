@@ -53,6 +53,7 @@ import { useLocation } from 'react-router-dom';
 import VerificationRoute from './VerificationRoute';
 import DiceGame from './Games/Dice';
 import { ErrorProvider } from './Error/ErrorContext';
+import AnimatedHelpWidget from './LiveSupportSystem/AnimatedHelpWidget';
 
 const Layout = ({ children }) => {
   const { isExpanded } = useSidebar();
@@ -66,7 +67,12 @@ const Layout = ({ children }) => {
         ${isExpanded ? 'ml-64' : 'ml-20'}
       `}>
         <NavBar />
-        {user && <LiveSupportWidget />}
+        {user && (
+  <>
+    <LiveSupportWidget />
+    <AnimatedHelpWidget />
+  </>
+)}
         <main className="min-h-screen">
           {children}
         </main>

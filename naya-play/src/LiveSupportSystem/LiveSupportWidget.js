@@ -1024,32 +1024,7 @@ const ModernSupportWidget = () => {
   return (
     <AnimatePresence>
       <div className="fixed bottom-4 right-4 z-50 flex flex-col items-end">
-        <motion.button
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          exit={{ scale: 0 }}
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={() => setIsOpen(true)}
-          className={`${
-            isOpen ? 'hidden' : 'flex'
-          } items-center space-x-2 bg-gradient-to-r from-indigo-600 to-blue-600 
-            text-white px-6 py-4 rounded-full shadow-lg hover:shadow-xl 
-            transition-all duration-300`}
-        >
-          <MessageCircle className="h-6 w-6" />
-          <span className="font-medium">Need Help?</span>
-          {unreadCount > 0 && (
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              className="ml-1 w-5 h-5 bg-red-500 text-white text-xs 
-                flex items-center justify-center rounded-full"
-            >
-              {unreadCount}
-            </motion.div>
-          )}
-        </motion.button>
+    
 
         {isOpen && (
           <motion.div

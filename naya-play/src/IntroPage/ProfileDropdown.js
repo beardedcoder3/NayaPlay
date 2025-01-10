@@ -11,6 +11,8 @@ import WalletModal from './WalletModal';
 import VipModal from './VipModal';
 import StatisticsModal from './StatisticsModal';
 import ModernSupportWidget from '../LiveSupportSystem/LiveSupportWidget';
+import { deleteDoc, doc } from 'firebase/firestore';
+import { db } from '../firebase';
 
 const ProfileDropdown = ({ isOpen, onClose }) => {
   const [isWalletOpen, setIsWalletOpen] = useState(false);
@@ -35,10 +37,41 @@ const ProfileDropdown = ({ isOpen, onClose }) => {
 
   const handleLogout = async () => {
     try {
+      const userId = auth.currentUser?.uid;
+      if (userId) {
+        // Unsubscribe from any active listeners first
+        const unsubscribePromises = [];
+  
+        // Clean up any active document listeners
+        if (window.activeSubscriptions) {
+          window.activeSubscriptions.forEach(unsub => {
+            if (typeof unsub === 'function') {
+              unsub();
+            }
+          });
+          window.activeSubscriptions = [];
+        }
+  
+        // Clean up user session data
+        await Promise.all([
+          // Delete active user status
+          deleteDoc(doc(db, 'activeUsers', userId)),
+          // Delete active chat session if exists
+          deleteDoc(doc(db, 'activeChats', userId))
+        ].filter(Boolean)); // Filter out any undefined promises
+      }
+  
+      // Now proceed with logout
       await signOut(auth);
-      navigate('/');
+      
+      // Clear any local state or storage if needed
+      localStorage.removeItem('lastRoute');
+      sessionStorage.clear();
+  
+      // Navigate to home page
+      navigate('/', { replace: true });
     } catch (error) {
-      console.error('Error logging out:', error);
+      console.error('Error during logout:', error);
     }
   };
 

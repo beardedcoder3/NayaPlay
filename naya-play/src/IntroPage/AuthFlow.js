@@ -1,7 +1,19 @@
 import React, { useState } from 'react';
-import { Mail, MessageCircle } from 'lucide-react';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { collection, query, where, getDocs, doc, setDoc } from 'firebase/firestore';
+import { Mail, Chrome, Facebook } from 'lucide-react';
+import { 
+  createUserWithEmailAndPassword, 
+  signInWithPopup,
+  GoogleAuthProvider,
+  FacebookAuthProvider 
+} from 'firebase/auth';
+import { 
+  collection, 
+  query, 
+  where, 
+  getDocs, 
+  doc, 
+  setDoc 
+} from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import { useNavigate } from 'react-router-dom';
 import PhoneVerificationSteps from './PhoneVerificationSteps';
@@ -63,6 +75,8 @@ const AuthFlow = () => {
       sessionStorage.clear();
       console.error('Registration error:', error);
       throw error;
+    } finally {
+      setIsRegistering(false);
     }
   };
 
@@ -106,6 +120,159 @@ const AuthFlow = () => {
     }
   };
 
+
+
+  const handleGoogleSignIn = async () => {
+    try {
+      setIsRegistering(true);
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({
+        prompt: 'select_account'
+      });
+      
+      const result = await signInWithPopup(auth, provider).catch((error) => {
+        if (error.code === 'auth/popup-closed-by-user') {
+          setIsRegistering(false);
+          return null;
+        }
+        throw error;
+      });
+  
+      if (!result) return;
+  
+      const user = result.user;
+      const now = serverTimestamp();
+  
+      // Check if user already exists
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, where('email', '==', user.email));
+      const querySnapshot = await getDocs(q);
+  
+      if (!querySnapshot.empty) {
+        // Update existing user
+        const existingUser = querySnapshot.docs[0];
+        
+        // Only update if createdAt doesn't exist
+        if (!existingUser.data().createdAt) {
+          await setDoc(doc(db, 'users', existingUser.id), {
+            ...existingUser.data(),
+            lastActive: now,
+            emailVerified: true,
+            authProvider: 'google',
+            photoURL: user.photoURL || existingUser.data().photoURL,
+            displayUsername: existingUser.data().displayUsername || user.displayName || user.email.split('@')[0],
+            createdAt: now // Set createdAt as serverTimestamp
+          }, { merge: true });
+        } else {
+          // Update without changing createdAt
+          await setDoc(doc(db, 'users', existingUser.id), {
+            ...existingUser.data(),
+            lastActive: now,
+            emailVerified: true,
+            authProvider: 'google',
+            photoURL: user.photoURL || existingUser.data().photoURL,
+            displayUsername: existingUser.data().displayUsername || user.displayName || user.email.split('@')[0]
+          }, { merge: true });
+        }
+  
+      } else {
+        // Create new user with proper timestamp
+        const userData = {
+          email: user.email,
+          username: user.email.split('@')[0].toLowerCase(),
+          displayUsername: user.displayName || user.email.split('@')[0],
+          authProvider: 'google',
+          emailVerified: true,
+          photoURL: user.photoURL,
+          status: 'active',
+          createdAt: now, // Using serverTimestamp for consistency
+          lastActive: now,
+          balance: 0,
+          totalWagered: 0,
+          totalBets: 0,
+          totalWon: 0,
+          vipLevel: 0,
+          vipPoints: 0,
+          notifications: {
+            email: true,
+            promotions: true
+          }
+        };
+  
+        // Set in both collections
+        await Promise.all([
+          setDoc(doc(db, 'users', user.uid), userData),
+          setDoc(doc(db, 'googleUsers', user.uid), {
+            ...userData,
+            displayName: user.displayName
+          })
+        ]);
+      }
+  
+      // Navigate to app
+      navigate('/app', { replace: true });
+  
+    } catch (error) {
+      console.error('Google sign in error:', error);
+      throw error;
+    } finally {
+      setIsRegistering(false);
+    }
+  };
+  
+  // Helper function to generate referral code
+  const generateReferralCode = () => {
+    return Math.random().toString(36).substring(2, 8).toUpperCase();
+  };
+
+
+
+
+  const handleFacebookSignIn = async () => {
+    try {
+      setIsRegistering(true);
+      const provider = new FacebookAuthProvider();
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+
+      // Create user document in facebookUsers collection
+      await setDoc(doc(db, 'facebookUsers', user.uid), {
+        email: user.email,
+        displayName: user.displayName,
+        photoURL: user.photoURL,
+        createdAt: serverTimestamp(),
+        lastActive: serverTimestamp(),
+        status: 'active',
+        balance: 0,
+        totalBets: 0,
+        totalWagered: 0,
+        totalWon: 0,
+        vipLevel: 0,
+        vipPoints: 0
+      });
+
+      // Also create in main users collection
+      await setDoc(doc(db, 'users', user.uid), {
+        email: user.email,
+        username: user.email.split('@')[0].toLowerCase(),
+        displayUsername: user.displayName || user.email.split('@')[0],
+        authProvider: 'facebook',
+        createdAt: serverTimestamp(),
+        emailVerified: user.emailVerified,
+        balance: 0,
+        lastActive: serverTimestamp(),
+        status: 'active'
+      });
+
+      navigate('/app', { replace: true });
+    } catch (error) {
+      console.error('Facebook sign in error:', error);
+      throw error;
+    } finally {
+      setIsRegistering(false);
+    }
+  };
+
   const handleModalClose = () => {
     localStorage.removeItem('registrationInProgress');
     setCurrentModal(null);
@@ -133,24 +300,38 @@ const AuthFlow = () => {
         </div>
         <div className="text-white/30 group-hover:text-white/70 transition-colors duration-200">→</div>
       </button>
-      
-      <button 
-        onClick={() => setCurrentModal('phone')}
-        disabled={isRegistering}
-        className="w-full group flex items-center justify-between px-4 py-3 rounded-xl
-          bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20
-          transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        <div className="flex items-center gap-3">
-          <MessageCircle size={20} className="text-white/70" />
-          <div className="text-left">
-            <div className="font-medium text-white">Continue with Phone</div>
-            <div className="text-sm text-white/50">Using your phone number</div>
+
+      {/* Social Login Section */}
+      <div className="space-y-4">
+        <div className="relative">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-gray-600"></div>
+          </div>
+          <div className="relative flex justify-center text-sm">
+            <span className="px-2 bg-slate-900 text-gray-400">Or Sign up with</span>
           </div>
         </div>
-        <div className="text-white/30 group-hover:text-white/70 transition-colors duration-200">→</div>
-      </button>
-
+        
+        <div className="flex gap-4 justify-center">
+          <button 
+            onClick={handleGoogleSignIn}
+            disabled={isRegistering}
+            className="flex items-center justify-center gap-2 px-6 py-2.5 border border-red-600 rounded-lg hover:bg-red-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Chrome className="w-5 h-5" />
+            <span>Google</span>
+          </button>
+          <button 
+            onClick={handleFacebookSignIn}
+            disabled={isRegistering}
+            className="flex items-center justify-center gap-2 px-6 py-2.5 border border-blue-600 rounded-lg hover:bg-blue-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Facebook className="w-5 h-5" />
+            <span>Facebook</span>
+          </button>
+        </div>
+      </div>
+    
       <div className="text-sm text-white/40 text-center mt-6">
         By continuing, you agree to our Terms of Service and Privacy Policy
       </div>

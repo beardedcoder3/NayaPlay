@@ -1,5 +1,15 @@
 {
   "projects": {
     "default": "nayaplay-3af8d"
-  }
+  },
+  "targets": {
+    "nayaplay-3af8d": {
+      "hosting": {
+        "nayaplay-co": [
+          "dist"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }

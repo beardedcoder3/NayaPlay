@@ -54,7 +54,7 @@ const vipLevels = {
   }
 };
 
-const VIPBanner = () => {
+const UserVIPBanner = () => {
   const [userData, setUserData] = useState({
     username: '',
     vipLevel: 'none',
@@ -71,73 +71,61 @@ const VIPBanner = () => {
     const unsubscribe = onSnapshot(doc(db, 'users', auth.currentUser.uid), (doc) => {
       if (doc.exists()) {
         const data = doc.data();
-        const wagered = data.totalWagered || 0;
+        const totalWagered = data.stats?.wagered || 0;
 
         let vipLevel = 'none';
         let progress = 0;
         let currentLevelWager = 0;
         let nextLevelWager = 1000;
 
-        if (wagered >= 25000) {
+        if (totalWagered >= 25000) {
           vipLevel = 'diamond';
           progress = 100;
           currentLevelWager = 25000;
           nextLevelWager = 25000;
-        } else if (wagered >= 10000) {
+        } else if (totalWagered >= 10000) {
           vipLevel = 'platinum';
-          progress = ((wagered - 10000) / 15000) * 100;
+          progress = ((totalWagered - 10000) / 15000) * 100;
           currentLevelWager = 10000;
           nextLevelWager = 25000;
-        } else if (wagered >= 5000) {
+        } else if (totalWagered >= 5000) {
           vipLevel = 'gold';
-          progress = ((wagered - 5000) / 5000) * 100;
+          progress = ((totalWagered - 5000) / 5000) * 100;
           currentLevelWager = 5000;
           nextLevelWager = 10000;
-        } else if (wagered >= 1000) {
+        } else if (totalWagered >= 1000) {
           vipLevel = 'silver';
-          progress = ((wagered - 1000) / 4000) * 100;
+          progress = ((totalWagered - 1000) / 4000) * 100;
           currentLevelWager = 1000;
           nextLevelWager = 5000;
-        } else if (wagered > 0) {
+        } else if (totalWagered > 0) {
           vipLevel = 'bronze';
-          progress = (wagered / 1000) * 100;
+          progress = (totalWagered / 1000) * 100;
           currentLevelWager = 0;
           nextLevelWager = 1000;
         }
 
-        // Only change: Updated date formatting
         const formatDate = (dateStr) => {
           if (!dateStr) return 'Unknown';
           
           try {
-            // For debugging
-            console.log('Received date string:', dateStr);
+            // Handle Firestore Timestamp
+            if (dateStr && dateStr.toDate) {
+              return dateStr.toDate().toLocaleString('en-US', { 
+                month: 'long',
+                year: 'numeric'
+              });
+            }
             
+            // Handle string date as fallback
             if (typeof dateStr === 'string') {
-              // Handle the exact format from your Firebase
-              const match = dateStr.match(/(\w+)\s+\d+,\s+(\d{4})/);
-              if (match) {
-                const [_, month, year] = match;
-                return `${month} ${year}`;
+              const date = new Date(dateStr);
+              if (!isNaN(date.getTime())) {
+                return date.toLocaleString('en-US', { 
+                  month: 'long',
+                  year: 'numeric'
+                });
               }
-            }
-            
-            // If it's a timestamp object
-            if (dateStr?.seconds) {
-              const date = new Date(dateStr.seconds * 1000);
-              return date.toLocaleDateString('en-US', { 
-                month: 'long',
-                year: 'numeric'
-              });
-            }
-            
-            // Last resort: try direct Date parsing
-            const date = new Date(dateStr);
-            if (!isNaN(date.getTime())) {
-              return date.toLocaleDateString('en-US', { 
-                month: 'long',
-                year: 'numeric'
-              });
             }
             
             return 'Unknown';
@@ -146,6 +134,7 @@ const VIPBanner = () => {
             return 'Unknown';
           }
         };
+        
         setUserData({
           username: data.displayUsername || 'Player',
           vipLevel,
@@ -153,7 +142,7 @@ const VIPBanner = () => {
           joinDate: formatDate(data.createdAt),
           currentLevelWager,
           nextLevelWager,
-          totalWagered: wagered
+          totalWagered: totalWagered
         });
       }
     });
@@ -260,4 +249,4 @@ const VIPBanner = () => {
   );
 };
 
-export default VIPBanner;
+export default UserVIPBanner;

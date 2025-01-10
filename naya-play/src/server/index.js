@@ -93,7 +93,7 @@ transporter.verify(function(error, success) {
   if (error) {
     console.error('SMTP Verification Error:', error);
   } else {
-    console.log("Server is ready to send emails");
+    console.log("Server is ready to send emails now");
   }
 });
 
