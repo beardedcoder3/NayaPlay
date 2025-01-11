@@ -77,10 +77,11 @@ app.use(cors({
 
 
 // Email Configuration
+// Email Configuration
 const transporter = nodemailer.createTransport({
-  host: 'smtppro.zoho.eu',         // Changed from smtppro.zoho.eu
-  port: 465,                    // Using SSL port as shown in your config
-  secure: true,                 // For port 465, secure should be true
+  host: 'smtp.zoho.eu',         // Changed from smtppro.zoho.eu
+  port: 465,                    
+  secure: true,                 
   auth: {
     user: 'noreply@nayaplay.co',
     pass: process.env.ZOHO_MAIL_PASSWORD
