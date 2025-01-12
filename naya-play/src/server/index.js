@@ -88,18 +88,16 @@ app.use(cors({
 // Email Configuration
 // Email Configuration
 // Email Configuration
+// Email Configuration
 const transporter = nodemailer.createTransport({
-  host: 'smtp.zoho.eu', // Use smtp.zoho.eu instead of smtppro.zoho.eu
+  host: 'smtppro.zoho.eu',    // Match what's in your .env file
   port: 465,
-  secure: true, // use SSL
+  secure: true,
   auth: {
     user: 'noreply@nayaplay.co',
     pass: process.env.ZOHO_MAIL_PASSWORD
-  },
-  debug: true,
-  logger: true
+  }
 });
-
 
 // Add this debug code before verify
 console.log('Attempting SMTP connection with:', {
