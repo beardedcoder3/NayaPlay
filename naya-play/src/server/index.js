@@ -89,39 +89,33 @@ app.use(cors({
 // Email Configuration
 // Email Configuration
 // Email Configuration
+// Email Configuration
 const transporter = nodemailer.createTransport({
-  host: 'smtppro.zoho.eu',    // Match what's in your .env file
-  port: 465,
+  host: process.env.ZOHO_MAIL_HOST,   // Use env variable directly
+  port: parseInt(process.env.ZOHO_MAIL_PORT),
   secure: true,
   auth: {
-    user: 'noreply@nayaplay.co',
+    user: process.env.ZOHO_MAIL_USER,
     pass: process.env.ZOHO_MAIL_PASSWORD
-  }
+  },
+  debug: true
 });
 
-// Add this debug code before verify
-// Add this debug code before verify
-console.log('Attempting SMTP connection with:', {
-  host: 'smtppro.zoho.eu',    // Match what's in your config
-  port: 465,
-  user: 'noreply@nayaplay.co',
-  pass_length: process.env.ZOHO_MAIL_PASSWORD?.length
-});
-
+// Single verification check
 transporter.verify(function(error, success) {
   if (error) {
-    console.error('SMTP Error Details:', {
+    console.error('SMTP Connection Error:', {
       message: error.message,
       code: error.code,
       command: error.command,
       response: error.response,
       auth: {
-        user: 'noreply@nayaplay.co',
-        passProvided: !!process.env.ZOHO_MAIL_PASSWORD
+        user: process.env.ZOHO_MAIL_USER,
+        passLength: process.env.ZOHO_MAIL_PASSWORD?.length
       }
     });
   } else {
-    console.log('SMTP Server is ready');
+    console.log('SMTP Server ready for emails');
   }
 });
 
