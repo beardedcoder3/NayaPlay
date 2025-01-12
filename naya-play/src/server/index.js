@@ -100,8 +100,9 @@ const transporter = nodemailer.createTransport({
 });
 
 // Add this debug code before verify
+// Add this debug code before verify
 console.log('Attempting SMTP connection with:', {
-  host: 'smtp.zoho.eu',
+  host: 'smtppro.zoho.eu',    // Match what's in your config
   port: 465,
   user: 'noreply@nayaplay.co',
   pass_length: process.env.ZOHO_MAIL_PASSWORD?.length
