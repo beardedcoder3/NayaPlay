@@ -89,19 +89,17 @@ app.use(cors({
 // Email Configuration
 // Email Configuration
 const transporter = nodemailer.createTransport({
-  host: process.env.ZOHO_MAIL_HOST,  // Use env variable instead of hardcoding
-  port: parseInt(process.env.ZOHO_MAIL_PORT),
-  secure: true,
+  host: 'smtp.zoho.eu', // Use smtp.zoho.eu instead of smtppro.zoho.eu
+  port: 465,
+  secure: true, // use SSL
   auth: {
-    user: process.env.ZOHO_MAIL_USER,
+    user: 'noreply@nayaplay.co',
     pass: process.env.ZOHO_MAIL_PASSWORD
-  }
-,
-  tls: {
-    rejectUnauthorized: true,
-    minVersion: 'TLSv1.2'
-  }
+  },
+  debug: true,
+  logger: true
 });
+
 
 // Add this debug code before verify
 console.log('Attempting SMTP connection with:', {
@@ -111,17 +109,20 @@ console.log('Attempting SMTP connection with:', {
   pass_length: process.env.ZOHO_MAIL_PASSWORD?.length
 });
 
-// Remove the second verify call since we already have one
 transporter.verify(function(error, success) {
   if (error) {
-    console.error('SMTP Connection Error Details:', {
+    console.error('SMTP Error Details:', {
       message: error.message,
       code: error.code,
       command: error.command,
-      response: error.response
+      response: error.response,
+      auth: {
+        user: 'noreply@nayaplay.co',
+        passProvided: !!process.env.ZOHO_MAIL_PASSWORD
+      }
     });
   } else {
-    console.log("Server is ready to send emails");
+    console.log('SMTP Server is ready');
   }
 });
 
