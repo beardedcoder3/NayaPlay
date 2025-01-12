@@ -81,15 +81,26 @@ app.use(cors({
 // Email Configuration
 // Email Configuration
 const transporter = nodemailer.createTransport({
-  host: 'smtp.zoho.eu',    // Must be smtp.zoho.eu not smtppro.zoho.eu
+  host: 'smtp.zoho.eu',
   port: 465,
   secure: true,
   auth: {
-    user: process.env.ZOHO_MAIL_USER || 'noreply@nayaplay.co',
+    user: 'noreply@nayaplay.co',
     pass: process.env.ZOHO_MAIL_PASSWORD,
+    type: 'login'  // Explicitly use login auth
   },
-  debug: true, // Enable detailed debug
-  logger: true // Enable logging
+  tls: {
+    rejectUnauthorized: true,
+    minVersion: 'TLSv1.2'
+  }
+});
+
+// Add this debug code before verify
+console.log('Attempting SMTP connection with:', {
+  host: 'smtp.zoho.eu',
+  port: 465,
+  user: 'noreply@nayaplay.co',
+  pass_length: process.env.ZOHO_MAIL_PASSWORD?.length
 });
 
 // Remove the second verify call since we already have one
