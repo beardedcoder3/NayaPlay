@@ -10,6 +10,14 @@ const { SNSClient, PublishCommand } = require("@aws-sdk/client-sns");
 
 require('dotenv').config();
 
+console.log('Environment check:', {
+  ZOHO_HOST: process.env.ZOHO_MAIL_HOST,
+  ZOHO_PORT: process.env.ZOHO_MAIL_PORT,
+  ZOHO_USER: process.env.ZOHO_MAIL_USER,
+  // Don't log the full password, just its length
+  ZOHO_PASS_LENGTH: process.env.ZOHO_MAIL_PASSWORD?.length || 0
+});
+
 // Initialize AWS SNS Client
 const snsClient = new SNSClient({
   region: "eu-north-1",
