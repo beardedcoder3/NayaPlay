@@ -89,14 +89,14 @@ app.use(cors({
 // Email Configuration
 // Email Configuration
 const transporter = nodemailer.createTransport({
-  host: 'smtp.zoho.eu',
-  port: 465,
+  host: process.env.ZOHO_MAIL_HOST,  // Use env variable instead of hardcoding
+  port: parseInt(process.env.ZOHO_MAIL_PORT),
   secure: true,
   auth: {
-    user: 'noreply@nayaplay.co',
-    pass: process.env.ZOHO_MAIL_PASSWORD,
-    type: 'login'  // Explicitly use login auth
-  },
+    user: process.env.ZOHO_MAIL_USER,
+    pass: process.env.ZOHO_MAIL_PASSWORD
+  }
+,
   tls: {
     rejectUnauthorized: true,
     minVersion: 'TLSv1.2'
