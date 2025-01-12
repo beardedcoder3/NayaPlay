@@ -79,21 +79,30 @@ app.use(cors({
 // Email Configuration
 // Email Configuration
 // Email Configuration
+// Email Configuration
 const transporter = nodemailer.createTransport({
-  host: 'smtp.zoho.eu',    // Changed from smtppro.zoho.eu
+  host: 'smtp.zoho.eu',    // Must be smtp.zoho.eu not smtppro.zoho.eu
   port: 465,
   secure: true,
   auth: {
-    user: 'noreply@nayaplay.co',
-    pass: process.env.ZOHO_MAIL_PASSWORD
-  }
+    user: process.env.ZOHO_MAIL_USER || 'noreply@nayaplay.co',
+    pass: process.env.ZOHO_MAIL_PASSWORD,
+  },
+  debug: true, // Enable detailed debug
+  logger: true // Enable logging
 });
-// Verify SMTP connection
+
+// Remove the second verify call since we already have one
 transporter.verify(function(error, success) {
   if (error) {
-    console.error('SMTP Verification Error:', error);
+    console.error('SMTP Connection Error Details:', {
+      message: error.message,
+      code: error.code,
+      command: error.command,
+      response: error.response
+    });
   } else {
-    console.log("Server is ready to send emails now");
+    console.log("Server is ready to send emails");
   }
 });
 
