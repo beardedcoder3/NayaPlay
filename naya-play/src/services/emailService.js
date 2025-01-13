@@ -6,15 +6,14 @@ const handlebars = require('handlebars');
 
 // Create Zoho Mail transporter
 const transporter = nodemailer.createTransport({
-  host: 'smtp.zoho.eu',
+  host: 'smtppro.zoho.eu',  // Changed from smtp.zoho.eu
   port: 465,
   secure: true,
   auth: {
     user: 'noreply@nayaplay.co',
-    pass: process.env.ZOHO_MAIL_PASSWORD // Make sure to set this in your environment variables
+    pass: process.env.ZOHO_MAIL_PASSWORD
   }
 });
-
 // Cache for email templates
 let emailTemplates = {};
 
