@@ -239,13 +239,17 @@ io.on('connection', (socket) => {
 // API Routes
 // Generate Email Verification Code Endpoint
 app.post('/api/generate-verification', async (req, res) => {
-  console.log('Generate verification request:', req.body);
+  console.log('Starting verification request:', req.body);
   const { email, userId, username } = req.body;
   
   try {
+    // 1. Generate verification code
+    console.log('Generating verification code...');
     const verificationCode = generateVerificationCode();
-    console.log('Generated code for user:', { userId, code: verificationCode });
+    console.log('Generated code:', { userId, code: verificationCode });
 
+    // 2. Save to Firebase
+    console.log('Saving to Firebase...');
     await firebaseAdmin.firestore()
       .collection('verificationCodes')
       .doc(userId)
@@ -256,8 +260,11 @@ app.post('/api/generate-verification', async (req, res) => {
         createdAt: firebaseAdmin.firestore.FieldValue.serverTimestamp(),
         expiresAt: new Date(Date.now() + 10 * 60 * 1000)
       });
+    console.log('Saved to Firebase successfully');
 
-    const info = await transporter.sendMail({
+    // 3. Prepare email
+    console.log('Preparing email...');
+    const mailOptions = {
       from: '"NayaPlay" <noreply@nayaplay.co>',
       to: email,
       subject: 'Verify Your NayaPlay Account',
@@ -272,13 +279,31 @@ app.post('/api/generate-verification', async (req, res) => {
           <p>This code will expire in 10 minutes.</p>
         </div>
       `
-    });
+    };
+    console.log('Email prepared:', { to: email, subject: mailOptions.subject });
 
-    console.log('Verification email sent:', info.messageId);
+    // 4. Send email
+    console.log('Sending email...');
+    const info = await transporter.sendMail(mailOptions);
+    console.log('Email sent successfully:', info.messageId);
+
     res.json({ success: true });
   } catch (error) {
-    console.error('Error generating verification:', error);
-    res.status(500).json({ error: 'Failed to send verification email' });
+    console.error('Detailed error in generate-verification:', {
+      name: error.name,
+      message: error.message,
+      code: error.code,
+      command: error.command,
+      response: error.response,
+      stack: error.stack,
+      phase: error.phase || 'unknown'
+    });
+    
+    res.status(500).json({ 
+      error: 'Failed to send verification email',
+      details: error.message,
+      code: error.code
+    });
   }
 });
 
