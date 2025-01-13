@@ -307,6 +307,34 @@ app.post('/api/generate-verification', async (req, res) => {
   }
 });
 
+app.get('/test-email', async (req, res) => {
+  try {
+    const testResult = await transporter.verify();
+    console.log('SMTP Test Result:', testResult);
+    
+    const info = await transporter.sendMail({
+      from: '"NayaPlay Test" <noreply@nayaplay.co>',
+      to: "noreply@nayaplay.co", // Send to self for testing
+      subject: "SMTP Test",
+      text: "Test email"
+    });
+    
+    res.json({ 
+      success: true, 
+      messageId: info.messageId 
+    });
+  } catch (error) {
+    console.error('Test Email Error:', {
+      message: error.message,
+      code: error.code,
+      command: error.command,
+      response: error.response
+    });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
 // Email Verify Code Endpoint
 app.post('/api/verify-code', async (req, res) => {
   console.log('Verify code request:', req.body);
