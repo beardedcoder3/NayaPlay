@@ -6,7 +6,7 @@ const handlebars = require('handlebars');
 
 // Create Zoho Mail transporter
 const transporter = nodemailer.createTransport({
-  host: 'smtp.zoho.com',
+  host: 'smtppro.zoho.com',
   port: 465,
   secure: true,
   auth: {
