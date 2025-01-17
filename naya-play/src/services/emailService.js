@@ -1,23 +1,25 @@
-// emailService.js
 const nodemailer = require('nodemailer');
 const fs = require('fs').promises;
 const path = require('path');
 const handlebars = require('handlebars');
 
-// Create Zoho Mail transporter
+// Create PurelyMail transporter
 const transporter = nodemailer.createTransport({
-  host: 'smtppro.zoho.eu',  // Changed from smtp.zoho.eu
-  port: 465,
-  secure: true,
+  host: 'smtp.purelymail.com',
+  port: 587,  // PurelyMail recommended port
+  secure: false, // Use TLS
   auth: {
     user: 'noreply@nayaplay.co',
-    pass: process.env.ZOHO_MAIL_PASSWORD
+    pass: process.env.SMTP_PASSWORD
+  },
+  tls: {
+    rejectUnauthorized: true
   }
 });
-// Cache for email templates
+
+// Rest of your code remains exactly the same
 let emailTemplates = {};
 
-// Load email template from file
 async function loadTemplate(templateName) {
   if (emailTemplates[templateName]) {
     return emailTemplates[templateName];
@@ -29,7 +31,6 @@ async function loadTemplate(templateName) {
   return emailTemplates[templateName];
 }
 
-// Send verification email
 async function sendVerificationEmail(userData) {
   try {
     const template = await loadTemplate('verification');
@@ -61,7 +62,6 @@ async function sendVerificationEmail(userData) {
   }
 }
 
-// Send welcome email after verification
 async function sendWelcomeEmail(userData) {
   try {
     const template = await loadTemplate('welcome');
