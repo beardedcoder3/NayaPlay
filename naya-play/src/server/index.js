@@ -1,15 +1,13 @@
+require('dotenv').config();  // Move this to the very top
+
 const express = require('express');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
 const firebaseAdmin = require('firebase-admin');
 const nodemailer = require('nodemailer');
 const cors = require('cors');
-
-const { SNSClient, PublishCommand } = require("@aws-sdk/client-sns");
-
-
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '.env') });  // Remove 'server' from path
+const { SNSClient, PublishCommand } = require("@aws-sdk/client-sns");
 
 // Add this debug log to verify
 console.log('DEBUG - Environment Variables:', {
@@ -18,6 +16,7 @@ console.log('DEBUG - Environment Variables:', {
   SMTP_USER: process.env.SMTP_USER || 'not set',
   SMTP_PASS_SET: process.env.SMTP_PASSWORD ? 'yes' : 'no'
 });
+
 // Initialize AWS SNS Client
 const snsClient = new SNSClient({
   region: "eu-north-1",
