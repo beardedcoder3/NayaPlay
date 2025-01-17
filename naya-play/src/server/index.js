@@ -4,7 +4,7 @@ const { Server } = require('socket.io');
 const firebaseAdmin = require('firebase-admin');
 const nodemailer = require('nodemailer');
 const cors = require('cors');
-const path = require('path');
+
 const { SNSClient, PublishCommand } = require("@aws-sdk/client-sns");
 
 
