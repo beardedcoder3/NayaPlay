@@ -14,6 +14,7 @@ console.log('Environment check:', {
   SMTP_HOST: process.env.SMTP_HOST,
   SMTP_PORT: process.env.SMTP_PORT,
   SMTP_USER: process.env.SMTP_USER,
+  // Don't log the full password, just its length
   SMTP_PASS_LENGTH: process.env.SMTP_PASSWORD?.length || 0
 });
 
@@ -90,17 +91,18 @@ app.use(cors({
 // Email Configuration
 // Email Configuration
 const transporter = nodemailer.createTransport({
-  host: 'smtp.purelymail.com',
-  port: 587,
-  secure: false, // Use TLS
+  host: process.env.SMTP_HOST,
+  port: parseInt(process.env.SMTP_PORT),
+  secure: false, // Use TLS for port 587
   auth: {
-    user: 'noreply@nayaplay.co',
+    user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASSWORD
   },
-  tls: {
-    rejectUnauthorized: true
-  }
+  requireTLS: true,
+  debug: true
 });
+
+
 // Single verification check
 transporter.verify(function(error, success) {
   if (error) {
@@ -566,9 +568,9 @@ const PORT = process.env.PORT || 3003;
 httpServer.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log('Email configuration loaded:', {
-    host: process.env.ZOHO_MAIL_HOST,
-    port: process.env.ZOHO_MAIL_PORT,
-    user: process.env.ZOHO_MAIL_USER
+    host: process.env.SMTP_HOST,
+    port: process.env.SMTP_PORT,
+    user: process.env.SMTP_USER
   });
   console.log('AWS SNS configuration loaded for region:', process.env.AWS_REGION);
 });
