@@ -11,11 +11,10 @@ const { SNSClient, PublishCommand } = require("@aws-sdk/client-sns");
 require('dotenv').config();
 
 console.log('Environment check:', {
-  ZOHO_HOST: process.env.ZOHO_MAIL_HOST,
-  ZOHO_PORT: process.env.ZOHO_MAIL_PORT,
-  ZOHO_USER: process.env.ZOHO_MAIL_USER,
-  // Don't log the full password, just its length
-  ZOHO_PASS_LENGTH: process.env.ZOHO_MAIL_PASSWORD?.length || 0
+  SMTP_HOST: process.env.SMTP_HOST,
+  SMTP_PORT: process.env.SMTP_PORT,
+  SMTP_USER: process.env.SMTP_USER,
+  SMTP_PASS_LENGTH: process.env.SMTP_PASSWORD?.length || 0
 });
 
 // Initialize AWS SNS Client
@@ -111,15 +110,14 @@ transporter.verify(function(error, success) {
       command: error.command,
       response: error.response,
       auth: {
-        user: process.env.ZOHO_MAIL_USER,
-        passLength: process.env.ZOHO_MAIL_PASSWORD?.length
+        user: process.env.SMTP_USER,
+        passLength: process.env.SMTP_PASSWORD?.length
       }
     });
   } else {
     console.log('SMTP Server ready for emails');
   }
 });
-
 
 // Add this code temporarily at the top of your index.js after the transporter configuration
 (async () => {
@@ -550,9 +548,9 @@ app.get('/test', (req, res) => {
   res.json({ 
     message: 'Server is running',
     emailConfig: {
-      host: process.env.ZOHO_MAIL_HOST,
-      port: process.env.ZOHO_MAIL_PORT,
-      user: process.env.ZOHO_MAIL_USER
+      host: process.env.SMTP_HOST,
+      port: process.env.SMTP_PORT,
+      user: process.env.SMTP_USER
     },
     awsConfig: {
       region: process.env.AWS_REGION
