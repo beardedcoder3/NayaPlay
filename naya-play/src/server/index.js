@@ -8,16 +8,16 @@ const path = require('path');
 const { SNSClient, PublishCommand } = require("@aws-sdk/client-sns");
 
 
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });  // Remove 'server' from path
 
-console.log('Environment check:', {
-  SMTP_HOST: process.env.SMTP_HOST,
-  SMTP_PORT: process.env.SMTP_PORT,
-  SMTP_USER: process.env.SMTP_USER,
-  // Don't log the full password, just its length
-  SMTP_PASS_LENGTH: process.env.SMTP_PASSWORD?.length || 0
+// Add this debug log to verify
+console.log('DEBUG - Environment Variables:', {
+  SMTP_HOST: process.env.SMTP_HOST || 'not set',
+  SMTP_PORT: process.env.SMTP_PORT || 'not set',
+  SMTP_USER: process.env.SMTP_USER || 'not set',
+  SMTP_PASS_SET: process.env.SMTP_PASSWORD ? 'yes' : 'no'
 });
-
 // Initialize AWS SNS Client
 const snsClient = new SNSClient({
   region: "eu-north-1",
