@@ -205,14 +205,14 @@ const GlobalChat = () => {
       const levels = {};
       snapshot.docs.forEach(doc => {
         const data = doc.data();
-        const wagered = data.stats?.wagered || 0;
+        const totalWagered = data.totalWagered || 0; // Changed from stats.wagered to totalWagered
         let vipLevel = 'none';
         
-        if (wagered >= 25000) vipLevel = 'diamond';
-        else if (wagered >= 10000) vipLevel = 'platinum';
-        else if (wagered >= 5000) vipLevel = 'gold';
-        else if (wagered >= 1000) vipLevel = 'silver';
-        else if (wagered > 0) vipLevel = 'bronze';
+        if (totalWagered >= 25000) vipLevel = 'diamond';
+        else if (totalWagered >= 10000) vipLevel = 'platinum';
+        else if (totalWagered >= 5000) vipLevel = 'gold';
+        else if (totalWagered >= 1000) vipLevel = 'silver';
+        else if (totalWagered > 0) vipLevel = 'bronze';
         
         levels[doc.id] = vipLevel;
       });
@@ -330,22 +330,27 @@ const GlobalChat = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!message.trim()) return;
-
+  
     const now = Date.now();
     if (now - lastMessageTime < SPAM_TIMEOUT) {
       alert('Please wait a moment before sending another message');
       return;
     }
-
+  
     try {
+      // Get user data first
+      const userRef = doc(db, 'users', currentUser.uid);
+      const userDoc = await getDoc(userRef);
+      const userData = userDoc.data();
+  
       await addDoc(collection(db, 'chat'), {
         text: message.trim(),
         userId: currentUser.uid,
-        username: currentUser.displayName || currentUser.email.split('@')[0],
+        username: userData.username || currentUser.email.split('@')[0],
         timestamp: serverTimestamp(),
         mentions: message.match(/@(\w+)/g)?.map(m => m.slice(1)) || []
       });
-
+  
       setMessage('');
       setLastMessageTime(now);
       if (isAutoScrollEnabled) {

@@ -1,6 +1,18 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { doc, onSnapshot, collection, query, where, orderBy, updateDoc, increment, getDoc } from 'firebase/firestore';
+import { 
+  doc, 
+  onSnapshot, 
+  collection, 
+  query, 
+  where, 
+  orderBy, 
+  updateDoc, 
+  increment,
+  serverTimestamp,
+  addDoc,
+  getDoc
+} from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 
 const BalanceContext = createContext();
@@ -11,21 +23,35 @@ export function BalanceProvider({ children }) {
   const auth = getAuth();
 
   useEffect(() => {
-    // Skip if during registration
-    if (!auth.currentUser || sessionStorage.getItem('registrationInProgress')) {
-      return;
-    }
+    if (!auth.currentUser) return;
 
     const unsubscribers = [];
 
-    // Listen to user's balance
-    const userRef = doc(db, 'users', auth.currentUser.uid);
-    const unsubscribeBalance = onSnapshot(userRef, (doc) => {
-      if (doc.exists()) {
-        setBalance(doc.data().balance || 0);
+    // Set up balance listener
+    const setupBalanceListener = async () => {
+      try {
+        const userRef = doc(db, 'users', auth.currentUser.uid);
+        const googleUserRef = doc(db, 'googleUsers', auth.currentUser.uid);
+    
+        const unsubscribeUser = onSnapshot(userRef, (doc) => {
+          if (doc.exists()) {
+            setBalance(doc.data().balance || 0);
+          }
+        });
+        unsubscribers.push(unsubscribeUser);
+    
+        const unsubscribeGoogleUser = onSnapshot(googleUserRef, (doc) => {
+          if (doc.exists()) {
+            setBalance(doc.data().balance || 0);
+          }
+        });
+        unsubscribers.push(unsubscribeGoogleUser);
+    
+      } catch (error) {
+        console.error("Error setting up balance listener:", error);
       }
-    });
-    unsubscribers.push(unsubscribeBalance);
+    };
+    setupBalanceListener();
 
     // Listen to user's regular transactions
     const transactionsRef = collection(db, 'transactions');
@@ -81,25 +107,6 @@ export function BalanceProvider({ children }) {
     });
     unsubscribers.push(unsubscribeSenderTransactions);
 
-    const updateAllTransactions = (type, newTransactions) => {
-      setTransactions(prev => {
-        // Filter out old transactions of this type
-        const filteredTransactions = prev.filter(t => {
-          if (type === 'regular') return t.type === 'agent_transfer';
-          if (type === 'receiver') return t.type !== 'agent_transfer' || !t.isReceived;
-          if (type === 'sender') return t.type !== 'agent_transfer' || t.isReceived;
-          return true;
-        });
-
-        // Combine and sort all transactions
-        return [...filteredTransactions, ...newTransactions].sort((a, b) => {
-          const dateA = (a.createdAt || a.timestamp)?.toDate() || new Date(0);
-          const dateB = (b.createdAt || b.timestamp)?.toDate() || new Date(0);
-          return dateB - dateA;
-        });
-      });
-    };
-
     return () => {
       unsubscribers.forEach(unsub => unsub());
     };
@@ -108,9 +115,50 @@ export function BalanceProvider({ children }) {
   const updateBalance = async (amount) => {
     if (!auth.currentUser) return;
     
-    const userRef = doc(db, 'users', auth.currentUser.uid);
-    await updateDoc(userRef, {
-      balance: increment(amount)
+    try {
+      // Determine which collection to use
+      const googleUserRef = doc(db, 'googleUsers', auth.currentUser.uid);
+      const googleUserDoc = await getDoc(googleUserRef);
+      const isGoogleUser = googleUserDoc.exists();
+      
+      // Get reference to correct collection
+      const balanceRef = isGoogleUser ? googleUserRef : doc(db, 'users', auth.currentUser.uid);
+      
+      console.log(`Updating balance in ${isGoogleUser ? 'googleUsers' : 'users'} by:`, amount);
+
+      // Update balance
+      await updateDoc(balanceRef, {
+        balance: increment(amount)
+      });
+
+      // Record transaction
+      await addDoc(collection(db, 'transactions'), {
+        userId: auth.currentUser.uid,
+        amount: amount,
+        type: amount > 0 ? 'credit' : 'debit',
+        createdAt: serverTimestamp()
+      });
+      
+    } catch (error) {
+      console.error('Error updating balance:', error);
+      throw error;
+    }
+  };
+
+  const updateAllTransactions = (type, newTransactions) => {
+    setTransactions(prev => {
+      const filteredTransactions = prev.filter(t => {
+        if (type === 'regular') return t.type === 'agent_transfer';
+        if (type === 'receiver') return t.type !== 'agent_transfer' || !t.isReceived;
+        if (type === 'sender') return t.type !== 'agent_transfer' || t.isReceived;
+        return true;
+      });
+
+      return [...filteredTransactions, ...newTransactions].sort((a, b) => {
+        const dateA = (a.createdAt || a.timestamp)?.toDate() || new Date(0);
+        const dateB = (b.createdAt || b.timestamp)?.toDate() || new Date(0);
+        return dateB - dateA;
+      });
     });
   };
 
@@ -128,3 +176,5 @@ export function useBalance() {
   }
   return context;
 }
+
+export default BalanceProvider;

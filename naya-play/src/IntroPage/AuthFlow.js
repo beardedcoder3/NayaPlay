@@ -29,23 +29,17 @@ const AuthFlow = () => {
     try {
       setIsRegistering(true);
       sessionStorage.clear();
-  
-      // Set flags BEFORE any async operations
       sessionStorage.setItem('registrationInProgress', 'true');
       
-      // Create user
       const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
       const user = userCredential.user;
   
-      // Store user info
       sessionStorage.setItem('userId', user.uid);
       sessionStorage.setItem('userEmail', formData.email);
   
-      // Create user document
       await setDoc(doc(db, 'users', user.uid), {
         email: formData.email,
-        username: formData.username.toLowerCase(),
-        displayUsername: formData.username,
+        username: formData.username,  // Remove toLowerCase()
         dateOfBirth: formData.dateOfBirth,
         createdAt: serverTimestamp(),
         emailVerified: false,
@@ -54,7 +48,6 @@ const AuthFlow = () => {
         status: 'active'
       });
   
-      // Send verification email
       await fetch(`${process.env.REACT_APP_API_URL}/api/generate-verification`, {
         method: 'POST',
         headers: {
@@ -67,7 +60,6 @@ const AuthFlow = () => {
         })
       });
   
-      // Close modal and redirect
       setCurrentModal(null);
       window.location.replace('/verify-email');
   
@@ -130,88 +122,35 @@ const AuthFlow = () => {
         prompt: 'select_account'
       });
       
-      const result = await signInWithPopup(auth, provider).catch((error) => {
-        if (error.code === 'auth/popup-closed-by-user') {
-          setIsRegistering(false);
-          return null;
-        }
-        throw error;
+      // First check if user exists before trying to write
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+      
+      // Important: Create basic user document first
+      await setDoc(doc(db, 'users', user.uid), {
+        email: user.email,
+        username: user.email.split('@')[0].toLowerCase(),
+        displayUsername: user.displayName || user.email.split('@')[0],
+        dateOfBirth: '', // Required field in rules
+        createdAt: serverTimestamp(),
+        emailVerified: true,
+        balance: 0,
+        lastActive: serverTimestamp(),
+        status: 'active',
+        notifications: [], // Required field in rules
+        notificationsEnabled: true // Required field in rules
+      }, { merge: true });
+  
+      // Then create googleUsers document
+      await setDoc(doc(db, 'googleUsers', user.uid), {
+        email: user.email,
+        displayName: user.displayName,
+        photoURL: user.photoURL,
+        createdAt: serverTimestamp()
       });
   
-      if (!result) return;
-  
-      const user = result.user;
-      const now = serverTimestamp();
-  
-      // Check if user already exists
-      const usersRef = collection(db, 'users');
-      const q = query(usersRef, where('email', '==', user.email));
-      const querySnapshot = await getDocs(q);
-  
-      if (!querySnapshot.empty) {
-        // Update existing user
-        const existingUser = querySnapshot.docs[0];
-        
-        // Only update if createdAt doesn't exist
-        if (!existingUser.data().createdAt) {
-          await setDoc(doc(db, 'users', existingUser.id), {
-            ...existingUser.data(),
-            lastActive: now,
-            emailVerified: true,
-            authProvider: 'google',
-            photoURL: user.photoURL || existingUser.data().photoURL,
-            displayUsername: existingUser.data().displayUsername || user.displayName || user.email.split('@')[0],
-            createdAt: now // Set createdAt as serverTimestamp
-          }, { merge: true });
-        } else {
-          // Update without changing createdAt
-          await setDoc(doc(db, 'users', existingUser.id), {
-            ...existingUser.data(),
-            lastActive: now,
-            emailVerified: true,
-            authProvider: 'google',
-            photoURL: user.photoURL || existingUser.data().photoURL,
-            displayUsername: existingUser.data().displayUsername || user.displayName || user.email.split('@')[0]
-          }, { merge: true });
-        }
-  
-      } else {
-        // Create new user with proper timestamp
-        const userData = {
-          email: user.email,
-          username: user.email.split('@')[0].toLowerCase(),
-          displayUsername: user.displayName || user.email.split('@')[0],
-          authProvider: 'google',
-          emailVerified: true,
-          photoURL: user.photoURL,
-          status: 'active',
-          createdAt: now, // Using serverTimestamp for consistency
-          lastActive: now,
-          balance: 0,
-          totalWagered: 0,
-          totalBets: 0,
-          totalWon: 0,
-          vipLevel: 0,
-          vipPoints: 0,
-          notifications: {
-            email: true,
-            promotions: true
-          }
-        };
-  
-        // Set in both collections
-        await Promise.all([
-          setDoc(doc(db, 'users', user.uid), userData),
-          setDoc(doc(db, 'googleUsers', user.uid), {
-            ...userData,
-            displayName: user.displayName
-          })
-        ]);
-      }
-  
-      // Navigate to app
       navigate('/app', { replace: true });
-  
+      
     } catch (error) {
       console.error('Google sign in error:', error);
       throw error;

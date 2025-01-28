@@ -12,7 +12,9 @@ import {
   onSnapshot,
   writeBatch
 } from 'firebase/firestore';
-
+import { getDoc} from 'firebase/firestore';
+import { doc } from 'firebase/firestore';
+import { where } from 'firebase/firestore';
 const LiveBetsContext = createContext();
 const MAX_BETS = 10;
 
@@ -70,46 +72,79 @@ export const LiveBetsProvider = ({ children }) => {
   };
 
   useEffect(() => {
-    // Set up real-time listener for most recent bets
     const betsQuery = query(
       collection(db, 'liveBets'),
       orderBy('timestamp', 'desc'),
       limit(MAX_BETS)
     );
-
-    const unsubscribe = onSnapshot(betsQuery, (snapshot) => {
+  
+    const unsubscribe = onSnapshot(betsQuery, async (snapshot) => {
+      const userDisplayNames = new Map();
+      const userGhostModes = new Map();
+      const userIds = [...new Set(snapshot.docs.map(doc => doc.data().userId))];
+  
+      // Fetch user documents including ghost mode status
+      await Promise.all(userIds.map(async (userId) => {
+        try {
+          const userDoc = await getDoc(doc(db, 'users', userId));
+  
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            userDisplayNames.set(userId, userData.username);
+            userGhostModes.set(userId, userData.ghostMode);
+          }
+        } catch (error) {
+          console.error(`Error fetching user ${userId}:`, error);
+        }
+      }));
+  
       const bets = snapshot.docs.map(doc => {
         const data = doc.data();
+        const isGhostMode = userGhostModes.get(data.userId) || false;
+        const username = isGhostMode ? 'Anonymous' : (userDisplayNames.get(data.userId) || data.user);
+        const isLoss = data.status === 'lost' || data.multiplier === 0;
+        
         return {
           id: doc.id,
           ...data,
+          user: username,
           betAmount: parseFloat(data.betAmount),
-          multiplier: parseFloat(data.multiplier),
-          payout: parseFloat(data.payout),
+          multiplier: isLoss ? '0' : parseFloat(data.multiplier).toFixed(2),
+          multiplierColor: isLoss ? 'text-red-500' : 'text-blue-500',
+          payout: isLoss ? -parseFloat(data.betAmount) : parseFloat(data.payout),
           time: formatTime(data.timestamp?.toDate())
         };
       });
+      
       setAllBets(bets);
     });
-
-    // Run initial cleanup
+  
     deleteOldBets();
-
     return () => unsubscribe();
   }, []);
-
-  const addBet = async (newBet) => {
+  
+  const addBet = async (newBet, user) => {
     try {
-      // Add new bet
+      const userDoc = await getDoc(doc(db, 'users', user.uid));
+      let username = user.displayName;
+      let isGhostMode = false;
+      
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        username = userData.username || username;
+        isGhostMode = userData.ghostMode || false;
+      }
+  
       await addDoc(collection(db, 'liveBets'), {
         ...newBet,
+        userId: user.uid,
+        user: isGhostMode ? 'Anonymous' : username,
         timestamp: serverTimestamp(),
         betAmount: parseFloat(newBet.betAmount),
-        multiplier: parseFloat(newBet.multiplier),
+        multiplier: newBet.status === 'lost' ? 0 : parseFloat(newBet.multiplier).toFixed(2),
         payout: parseFloat(newBet.payout)
       });
-
-      // Clean up old bets after adding new one
+  
       await deleteOldBets();
     } catch (error) {
       console.error("Error adding bet:", error);

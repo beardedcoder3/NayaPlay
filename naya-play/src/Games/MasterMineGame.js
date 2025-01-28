@@ -135,21 +135,12 @@ const MinesGame = () => {
            mineCount < 25;
   };
 
-  const handleBet = (e) => {
-    e.preventDefault();
-    if (validateBet()) {
-      initializeGame();
-    }
-  };
-
-  const initializeGame = async () => {
-    const bet = parseFloat(betAmount);
-    updateBalance(-bet);
-
-    const willWin = shouldAllowWin(bet, userStats);
+  const initializeGame = () => {
+    const willWin = shouldAllowWin(parseFloat(betAmount), userStats);
     const minePositions = [];
-
+  
     if (!willWin) {
+      // Place mines in early positions if the player should lose
       for(let i = 0; i < mineCount; i++) {
         let pos;
         do {
@@ -158,6 +149,7 @@ const MinesGame = () => {
         minePositions.push(pos);
       }
     } else {
+      // Place mines in later positions if the player should win
       while (minePositions.length < mineCount) {
         let pos;
         do {
@@ -166,52 +158,116 @@ const MinesGame = () => {
         minePositions.push(pos);
       }
     }
-
+  
     setMines(minePositions);
     setRevealed([]);
     setGameState('playing');
     calculateMultiplier(0);
   };
+  
+  const handleBet = async (e) => {
+    e.preventDefault();
+    if (validateBet()) {
+      const bet = parseFloat(betAmount);
+      updateBalance(-bet);
+  
+      // Update user document for wager tracking at the start of the game
+      const userRef = doc(db, 'users', auth.currentUser.uid);
+      await updateDoc(userRef, {
+        totalWagered: increment(bet)
+      });
+  
+      initializeGame(); // Now this function is defined
+    }
+  };
 
-  const handleSquareClick = async (index) => {
+  const handleCashOut = async () => {
+    const betValue = parseFloat(betAmount);
+    const winAmount = betValue * parseFloat(multiplier);
+    const finalMultiplier = (winAmount / betValue).toFixed(2); // Calculate actual multiplier
+    
+    try {
+      // Create bet data with exact structure matching Firestore
+      const betData = {
+        betAmount: betValue,
+        date: new Date().toISOString(),
+        game: "Mines",
+        multiplier: parseFloat(finalMultiplier), // Use the calculated multiplier
+        payout: winAmount,
+        status: 'won'
+      };
+
+      // Record in user's bets subcollection
+      await addDoc(collection(db, 'users', auth.currentUser.uid, 'bets'), betData);
+
+      // Record in liveBets
+      await addDoc(collection(db, 'liveBets'), {
+        game: "Mines",
+        userId: auth.currentUser.uid,  // Add this
+        betAmount: betValue,
+        multiplier: parseFloat(finalMultiplier),
+        payout: winAmount,
+        time: "Just now",
+        timestamp: serverTimestamp(),
+        status: 'won'
+      });
+
+      // Update balance
+      await updateBalance(winAmount);
+
+      // Update user stats
+      setUserStats(prev => ({
+        ...prev,
+        recentWins: prev.recentWins + 1,
+        lastResults: [true, ...prev.lastResults].slice(0, 5),
+        bigWinCount: betAmount > 50 ? prev.bigWinCount + 1 : prev.bigWinCount
+      }));
+
+    } catch (error) {
+      console.error("Error processing cashout:", error);
+    }
+    
+    setGameState('won');
+};
+
+// In the handleSquareClick function, update the multiplier for losses:
+ const handleSquareClick = async (index) => {
     if (gameState !== 'playing' || revealed.includes(index)) return;
   
     if (mines.includes(index)) {
-      setUserStats(prev => ({
-        ...prev,
-        recentWins: 0,
-        lastResults: [false, ...prev.lastResults].slice(0, 5)
-      }));
-
       const betValue = parseFloat(betAmount);
       
       try {
+        // Create bet data with exact structure matching Firestore
+        const betData = {
+          betAmount: betValue,
+          date: new Date().toISOString(),
+          game: "Mines",
+          multiplier: '0', // Set to 0 for losses// Set to 0.00 for losses
+          payout: 0,
+          status: 'lost'
+        };
+
+        // Record in user's bets subcollection
+        await addDoc(collection(db, 'users', auth.currentUser.uid, 'bets'), betData);
+
+        // Record in liveBets
         await addDoc(collection(db, 'liveBets'), {
           game: "Mines",
-          user: auth.currentUser.email?.split('@')[0] || 'Anonymous',
+          userId: auth.currentUser.uid,  // Add this
           betAmount: betValue,
-          multiplier: 0,
+          multiplier: '0',
           payout: -betValue,
           time: "Just now",
           timestamp: serverTimestamp(),
           status: 'lost'
         });
-  
-        await addDoc(collection(db, `users/${auth.currentUser.uid}/bets`), {
-          game: "Mines",
-          betAmount: betValue,
-          multiplier: 0,
-          payout: -betValue,
-          date: new Date().toISOString(),
-          status: 'lost'
-        });
-  
-        const userRef = doc(db, 'users', auth.currentUser.uid);
-        await updateDoc(userRef, {
-          "stats.wagered": increment(betValue),
-          "stats.totalBets": increment(1),
-          "stats.losses": increment(1)
-        });
+        // Update stats
+        setUserStats(prev => ({
+          ...prev,
+          recentWins: 0,
+          lastResults: [false, ...prev.lastResults].slice(0, 5)
+        }));
   
       } catch (error) {
         console.error("Error processing bet:", error);
@@ -223,54 +279,8 @@ const MinesGame = () => {
       setRevealed(newRevealed);
       calculateMultiplier(newRevealed.length);
     }
-  };
-  
-  const handleCashOut = async () => {
-    setUserStats(prev => ({
-      ...prev,
-      recentWins: prev.recentWins + 1,
-      lastResults: [true, ...prev.lastResults].slice(0, 5),
-      bigWinCount: betAmount > 50 ? prev.bigWinCount + 1 : prev.bigWinCount
-    }));
+};
 
-    const betValue = parseFloat(betAmount);
-    const winAmount = betValue * parseFloat(multiplier);
-    
-    try {
-      await addDoc(collection(db, 'liveBets'), {
-        game: "Mines",
-        user: auth.currentUser.email?.split('@')[0] || 'Anonymous',
-        betAmount: betValue,
-        multiplier: parseFloat(multiplier),
-        payout: winAmount,
-        time: "Just now",
-        timestamp: serverTimestamp(),
-        status: 'won'
-      });
-  
-      await addDoc(collection(db, `users/${auth.currentUser.uid}/bets`), {
-        game: "Mines",
-        betAmount: betValue,
-        multiplier: parseFloat(multiplier),
-        payout: winAmount,
-        date: new Date().toISOString(),
-        status: 'won'
-      });
-  
-      const userRef = doc(db, 'users', auth.currentUser.uid);
-      await updateDoc(userRef, {
-        "stats.wagered": increment(betValue),
-        "stats.totalBets": increment(1),
-        "stats.wins": increment(1)
-      });
-  
-      updateBalance(winAmount);
-    } catch (error) {
-      console.error("Error processing cashout:", error);
-    }
-    
-    setGameState('won');
-  };
 
   return (
     <div className="h-[calc(100vh-64px)] bg-surface-800">

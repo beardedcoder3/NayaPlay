@@ -104,8 +104,9 @@ const MultiplierGame = () => {
     const winAmount = isWin ? bet * parseFloat(targetMultiplier) : 0;
     
     try {
+      // Add to liveBets collection
       await addDoc(collection(db, 'liveBets'), {
-        game: "Multiplier",
+        game: "Limbo",
         user: auth.currentUser.email?.split('@')[0] || 'Anonymous',
         betAmount: bet,
         multiplier: finalMultiplier,
@@ -114,23 +115,25 @@ const MultiplierGame = () => {
         timestamp: serverTimestamp(),
         status: isWin ? 'won' : 'lost'
       });
-
+  
+      // Add to user's bets collection
       await addDoc(collection(db, `users/${auth.currentUser.uid}/bets`), {
-        game: "Multiplier",
+        game: "Limbo",
         betAmount: bet,
         multiplier: finalMultiplier,
         payout: isWin ? winAmount : -bet,
         date: new Date().toISOString(),
         status: isWin ? 'won' : 'lost'
       });
-
+  
+      // Update user document
       const userRef = doc(db, 'users', auth.currentUser.uid);
       await updateDoc(userRef, {
-        "stats.wagered": increment(bet),
-        "stats.totalBets": increment(1),
-        [isWin ? "stats.wins" : "stats.losses"]: increment(1)
+        totalWagered: increment(bet),  // Update totalWagered
+        totalBets: increment(1),
+        [isWin ? "totalWon" : "totalLost"]: increment(isWin ? winAmount : bet)
       });
-
+  
       if (isWin) {
         updateBalance(winAmount);
       }
@@ -138,31 +141,73 @@ const MultiplierGame = () => {
       console.error("Error processing game result:", error);
     }
   };
-
   const handlePlay = async () => {
     if (!validateInputs() || gameState === 'playing') return;
 
     const bet = parseFloat(betAmount);
     const target = parseFloat(targetMultiplier);
-    updateBalance(-bet);
-    setGameState('playing');
-    
-    const finalMultiplier = generateGameMultiplier();
-    const isWin = finalMultiplier >= target && generateRandom() <= 0.97; // House edge
-    
-    setCurrentMultiplier(finalMultiplier);
-    
-    setRecentResults(prev => [{
-      multiplier: finalMultiplier,
-      isWin
-    }, ...prev].slice(0, 5));
 
-    setTimeout(async () => {
-      await processGameResult(isWin, finalMultiplier);
+    try {
+      // First deduct bet and update totalWagered, just like Mines
+      updateBalance(-bet);
+      
+      // Update totalWagered immediately, just like Mines
+      const userRef = doc(db, 'users', auth.currentUser.uid);
+      await updateDoc(userRef, {
+        totalWagered: increment(bet)
+      });
+
+      setGameState('playing');
+      
+      const finalMultiplier = generateGameMultiplier();
+      const isWin = finalMultiplier >= target && generateRandom() <= 0.97;
+      const winAmount = isWin ? bet * parseFloat(targetMultiplier) : 0;
+      
+      setCurrentMultiplier(finalMultiplier);
+      setRecentResults(prev => [{
+        multiplier: finalMultiplier,
+        isWin
+      }, ...prev].slice(0, 5));
+
+      try {
+        // Create bet data
+        const betData = {
+          betAmount: bet,
+          date: new Date().toISOString(),
+          game: "Limbo",
+          multiplier: finalMultiplier,
+          payout: isWin ? winAmount : -bet,
+          status: isWin ? 'won' : 'lost'
+        };
+
+        // Add to liveBets collection
+        await addDoc(collection(db, 'liveBets'), {
+          ...betData,
+          user: auth.currentUser.email?.split('@')[0] || 'Anonymous',
+          time: "Just now",
+          timestamp: serverTimestamp()
+        });
+
+        // Add to user's bets collection
+        await addDoc(collection(db, `users/${auth.currentUser.uid}/bets`), betData);
+
+        if (isWin) {
+          // Update balance only on win, just like Mines
+          await updateBalance(winAmount);
+        }
+
+      } catch (error) {
+        console.error("Error recording bet result:", error);
+      }
+
       setGameState(isWin ? 'won' : 'lost');
-    }, 1000);
+
+    } catch (error) {
+      console.error("Error processing game:", error);
+    }
   };
 
+  
   return (
     <div className="bg-gray-900 min-h-screen p-8">
       <div className="max-w-7xl mx-auto">

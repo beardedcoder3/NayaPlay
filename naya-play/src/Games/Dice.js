@@ -198,45 +198,72 @@ const DiceGame = () => {
 
   const handlePlay = async () => {
     if (isRolling || !parseFloat(betAmount)) return;
-
+  
     const bet = parseFloat(betAmount);
     if (bet > balance) return;
-
-    setIsRolling(true);
-    updateBalance(-bet);
-
-    const number = generateRandom();
-    const isWin = isOver ? number > targetNumber : number < targetNumber;
-
-    setRollNumber(number);
-    setRecentResults(prev => [{
-      number,
-      isWin
-    }, ...prev].slice(0, 5));
-
+  
     try {
-      await addDoc(collection(db, 'liveBets'), {
-        game: "Dice",
-        user: auth.currentUser.email?.split('@')[0] || 'Anonymous',
-        betAmount: bet,
-        multiplier: parseFloat(multiplier),
-        number,
-        payout: isWin ? bet * parseFloat(multiplier) : -bet,
-        timestamp: serverTimestamp(),
+      // First deduct bet and update totalWagered, just like Mines
+      updateBalance(-bet);
+      setIsRolling(true);
+  
+      // Update totalWagered immediately, just like Mines
+      const userRef = doc(db, 'users', auth.currentUser.uid);
+      await updateDoc(userRef, {
+        totalWagered: increment(bet)
       });
-
-      if (isWin) {
-        updateBalance(bet * parseFloat(multiplier));
+  
+      const number = generateRandom();
+      const isWin = isOver ? number > targetNumber : number < targetNumber;
+      const winAmount = bet * parseFloat(multiplier);
+  
+      setRollNumber(number);
+      setRecentResults(prev => [{
+        number,
+        isWin
+      }, ...prev].slice(0, 5));
+  
+      try {
+        // Create bet data
+        const betData = {
+          betAmount: bet,
+          date: new Date().toISOString(),
+          game: "Dice",
+          multiplier: parseFloat(multiplier),
+          payout: isWin ? winAmount : -bet,
+          status: isWin ? 'won' : 'lost'
+        };
+  
+        // Add to user's personal bets collection
+        await addDoc(collection(db, 'users', auth.currentUser.uid, 'bets'), betData);
+  
+        // Add to liveBets collection
+        await addDoc(collection(db, 'liveBets'), {
+          ...betData,
+          user: auth.currentUser.email?.split('@')[0] || 'Anonymous',
+          time: "Just now",
+          timestamp: serverTimestamp()
+        });
+  
+        if (isWin) {
+          // Update balance only on win, just like Mines
+          await updateBalance(winAmount);
+        }
+  
+      } catch (error) {
+        console.error("Error recording bet result:", error);
       }
+  
     } catch (error) {
       console.error("Error processing bet:", error);
     }
-
+  
     setTimeout(() => {
       setIsRolling(false);
       setRollNumber(null);
     }, 2000);
   };
+
 
   return (
     <div className="bg-[#0f1114] min-h-screen p-8">

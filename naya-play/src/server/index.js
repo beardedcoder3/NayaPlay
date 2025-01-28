@@ -559,6 +559,76 @@ app.get('/test', (req, res) => {
   });
 });
 
+
+// Marketing Email Configuration
+const marketingTransporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST,
+  port: parseInt(process.env.SMTP_PORT),
+  secure: false,
+  auth: {
+    user: 'marketing@nayaplay.co', // Using the marketing email
+    pass: process.env.SMTP_MARKETING_PASSWORD // Using dedicated marketing password
+  },
+  requireTLS: true,
+  debug: true
+});
+
+// Verify marketing email configuration
+marketingTransporter.verify(function(error, success) {
+  if (error) {
+    console.error('Marketing SMTP Connection Error:', error);
+  } else {
+    console.log('Marketing SMTP Server ready');
+  }
+});
+
+// Add this new endpoint for sending marketing emails
+app.post('/api/send-marketing-email', async (req, res) => {
+  const { subject, htmlContent, recipients } = req.body;
+  
+  try {
+    // Validate inputs
+    if (!subject || !htmlContent || !recipients || !Array.isArray(recipients)) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Missing or invalid required fields' 
+      });
+    }
+
+    // Send email to each recipient
+    const results = await Promise.all(recipients.map(async (recipient) => {
+      const mailOptions = {
+        from: '"NayaPlay Marketing" <marketing@nayaplay.co>',
+        to: recipient,
+        subject: subject,
+        html: htmlContent
+      };
+
+      return marketingTransporter.sendMail(mailOptions);
+    }));
+
+    res.json({ 
+      success: true, 
+      messageIds: results.map(r => r.messageId)
+    });
+    
+  } catch (error) {
+    console.error('Marketing email error:', {
+      message: error.message,
+      code: error.code,
+      command: error.command,
+      response: error.response
+    });
+    
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to send marketing email',
+      details: error.message
+    });
+  }
+});
+
+
 // Start first game
 startNewGame();
 

@@ -71,13 +71,15 @@ const UserVIPBanner = () => {
     const unsubscribe = onSnapshot(doc(db, 'users', auth.currentUser.uid), (doc) => {
       if (doc.exists()) {
         const data = doc.data();
-        const totalWagered = data.stats?.wagered || 0;
+        // Read totalWagered directly from the document
+        const totalWagered = data.totalWagered || 0;
 
         let vipLevel = 'none';
         let progress = 0;
         let currentLevelWager = 0;
         let nextLevelWager = 1000;
 
+        // Calculate VIP level and progress based on total wager
         if (totalWagered >= 25000) {
           vipLevel = 'diamond';
           progress = 100;
@@ -85,24 +87,29 @@ const UserVIPBanner = () => {
           nextLevelWager = 25000;
         } else if (totalWagered >= 10000) {
           vipLevel = 'platinum';
-          progress = ((totalWagered - 10000) / 15000) * 100;
           currentLevelWager = 10000;
           nextLevelWager = 25000;
+          progress = ((totalWagered - 10000) / (25000 - 10000)) * 100;
         } else if (totalWagered >= 5000) {
           vipLevel = 'gold';
-          progress = ((totalWagered - 5000) / 5000) * 100;
           currentLevelWager = 5000;
           nextLevelWager = 10000;
+          progress = ((totalWagered - 5000) / (10000 - 5000)) * 100;
         } else if (totalWagered >= 1000) {
           vipLevel = 'silver';
-          progress = ((totalWagered - 1000) / 4000) * 100;
           currentLevelWager = 1000;
           nextLevelWager = 5000;
+          progress = ((totalWagered - 1000) / (5000 - 1000)) * 100;
         } else if (totalWagered > 0) {
           vipLevel = 'bronze';
-          progress = (totalWagered / 1000) * 100;
           currentLevelWager = 0;
           nextLevelWager = 1000;
+          progress = (totalWagered / 1000) * 100; // This will now show progress for totalWagered of 100
+        } else {
+          vipLevel = 'none';
+          currentLevelWager = 0;
+          nextLevelWager = 1000;
+          progress = 0;
         }
 
         const formatDate = (dateStr) => {
@@ -142,7 +149,7 @@ const UserVIPBanner = () => {
           joinDate: formatDate(data.createdAt),
           currentLevelWager,
           nextLevelWager,
-          totalWagered: totalWagered
+          totalWagered
         });
       }
     });

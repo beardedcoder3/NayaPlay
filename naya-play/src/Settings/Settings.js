@@ -15,8 +15,17 @@ import {
 import { doc, getDoc, updateDoc, query, collection, where, getDocs } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import { runTransaction, increment, serverTimestamp } from 'firebase/firestore';
-
+import { setDoc } from 'firebase/firestore';
 import { updateEmail } from 'firebase/auth';
+import { onSnapshot } from 'firebase/firestore';
+import { 
+
+  applyActionCode,
+  checkActionCode
+} from 'firebase/auth';
+import { debounce } from "lodash"
+
+import { Bell } from 'lucide-react';
 
 // Base Input Component - Styled to match LiveBetLobby
 const InputField = ({ 
@@ -176,7 +185,7 @@ const Modal = ({ isOpen, onClose, title, children }) => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/50 backdrop-sm" onClick={onClose} />
       <div className="relative bg-gray-800/90 rounded-2xl border border-gray-700/50 shadow-2xl max-w-md w-full">
         <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-indigo-500 to-transparent opacity-50" />
         <div className="p-6 border-b border-gray-700/50 flex items-center justify-between">
@@ -243,31 +252,26 @@ const SettingsSidebar = ({ currentSection }) => {
 
 
 export const GeneralSettings = () => {
-  const { user, refreshUser } = useAuth();
-  const [phone, setPhone] = useState('');
-  const [countryCode, setCountryCode] = useState('+380');
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [userData, setUserData] = useState(null);
-  const [newEmail, setNewEmail] = useState('');
-  const [showVerification, setShowVerification] = useState(false);
-  const [verificationCode, setVerificationCode] = useState('');
-  const [emailError, setEmailError] = useState('');
-  const [verificationError, setVerificationError] = useState('');
-  const [password, setPassword] = useState('');
-  const [showReauth, setShowReauth] = useState(false);
+  const [newUsername, setNewUsername] = useState('');
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
+  const [usernameStatus, setUsernameStatus] = useState({
+    isChecking: false,
+    isAvailable: null,
+    message: ''
+  });
 
   useEffect(() => {
     const fetchUserData = async () => {
       if (user) {
         try {
-          // Refresh user data to get latest verification status
-          await refreshUser();
-          
           const userDoc = await getDoc(doc(db, 'users', user.uid));
           if (userDoc.exists()) {
             setUserData(userDoc.data());
-            setPhone(userDoc.data().phone || '');
-            setCountryCode(userDoc.data().countryCode || '+380');
           }
         } catch (error) {
           console.error('Error fetching user data:', error);
@@ -275,116 +279,71 @@ export const GeneralSettings = () => {
       }
     };
     fetchUserData();
-  }, [user, refreshUser]);
+  }, [user]);
 
-  const handlePhoneUpdate = async () => {
-    try {
-      setLoading(true);
-      await updateDoc(doc(db, 'users', user.uid), {
-        phone: phone,
-        countryCode: countryCode
+  const checkUsername = debounce(async (username) => {
+    if (!username || username.length < 3) {
+      setUsernameStatus({
+        isChecking: false,
+        isAvailable: null,
+        message: username ? 'Username must be at least 3 characters' : ''
       });
-      alert('Phone number updated successfully!');
-    } catch (error) {
-      console.error('Error updating phone:', error);
-      alert('Error updating phone number. Please try again.');
-    } finally {
-      setLoading(false);
+      return;
     }
-  };
-
-  const handleEmailChange = async () => {
-    if (!newEmail || newEmail === user?.email) return;
+ 
+    if (userData?.displayUsername === username) {
+      setUsernameStatus({
+        isChecking: false,
+        isAvailable: null,
+        message: 'This is your current username'
+      });
+      return;
+    }
+ 
+    setUsernameStatus(prev => ({ ...prev, isChecking: true }));
+ 
+    try {
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, where('username', '==', username.toLowerCase()));
+      const querySnapshot = await getDocs(q);
+ 
+      setUsernameStatus({
+        isChecking: false,
+        isAvailable: querySnapshot.empty,
+        message: querySnapshot.empty ? 'Username is available' : 'Username is already taken'
+      });
+    } catch (error) {
+      setUsernameStatus({
+        isChecking: false,
+        isAvailable: false,
+        message: 'Error checking username availability'
+      });
+    }
+  }, 500);
+ 
+  const handleUsernameUpdate = async () => {
+    if (!newUsername || !usernameStatus.isAvailable) return;
     
     setLoading(true);
-    setEmailError('');
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/generate-verification`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email: newEmail,
-          userId: user.uid,
-          username: userData?.username || ''
-        })
+      const userRef = doc(db, 'users', user.uid);
+      await updateDoc(userRef, {
+        username: newUsername.toLowerCase(),
+        displayUsername: newUsername
       });
-
-      if (!response.ok) {
-        throw new Error('Failed to send verification code');
-      }
-
-      setShowVerification(true);
-    } catch (error) {
-      setEmailError('Failed to send verification code. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleVerify = async () => {
-    if (!verificationCode) {
-      setVerificationError('Please enter verification code');
-      return;
-    }
-
-    setLoading(true);
-    setVerificationError('');
-
-    try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/verify-code`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          code: verificationCode,
-          userId: user.uid
-        })
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        setShowVerification(false);
-        setShowReauth(true);
-      } else {
-        setVerificationError(data.error || 'Invalid verification code');
-      }
-    } catch (error) {
-      setVerificationError('Failed to verify code. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleReauth = async () => {
-    if (!password) {
-      setVerificationError('Please enter your password');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const credential = EmailAuthProvider.credential(user.email, password);
-      await reauthenticateWithCredential(user, credential);
       
-      await updateEmail(auth.currentUser, newEmail);
-      await updateDoc(doc(db, 'users', user.uid), {
-        email: newEmail
-      });
-
-      // Refresh user data after email update
-      await refreshUser();
-
-      setShowReauth(false);
-      setNewEmail('');
-      setPassword('');
-      setVerificationCode('');
-      alert('Email updated successfully!');
+      const userDoc = await getDoc(userRef);
+      setUserData(userDoc.data());
+      setNewUsername('');
+      setSuccessMessage('Username updated successfully');
+      
+      setTimeout(() => {
+        setSuccessMessage('');
+        setShowEditModal(false);
+      }, 1500);
     } catch (error) {
-      setVerificationError('Invalid password or error updating email. Please try again.');
+      console.error('Error updating username:', error);
+      setErrorMessage('Error updating username. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -392,167 +351,165 @@ export const GeneralSettings = () => {
 
   return (
     <div className="space-y-8">
+      {/* Username Card */}
+      <Card title="Username Settings" icon={User}>
+        <div className="flex justify-between items-center bg-gray-800/40 rounded-xl p-4 border border-gray-700/50">
+          <div>
+            <label className="text-sm text-gray-400 block mb-1">Current Username</label>
+            {userData ? (
+              <p className="text-xl font-medium bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
+                {userData.displayUsername}
+              </p>
+            ) : (
+              <div className="animate-pulse bg-gray-700 h-7 w-32 rounded" />
+            )}
+          </div>
+          <Button
+            onClick={() => setShowEditModal(true)}
+            variant="secondary"
+            className="px-4 py-2"
+          >
+            Edit
+          </Button>
+        </div>
+      </Card>
+
+      {/* Email Card */}
       <Card title="Email Settings" icon={Mail}>
-        <div className="space-y-6">
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-400">Current Email</label>
-            <div className="flex items-center space-x-2">
-              <p className="text-white">{user?.email}</p>
-              <Badge variant={user?.emailVerified ? "success" : "warning"}>
-                {user?.emailVerified ? "Verified" : "Unverified"}
-              </Badge>
+        <div className="flex justify-between items-center bg-gray-800/40 rounded-xl p-4 border border-gray-700/50">
+          <div>
+            <label className="text-sm text-gray-400 block mb-1">Email Address</label>
+            <div className="flex items-center gap-3">
+              <p className="text-xl font-medium bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
+                {user?.email}
+              </p>
+              <Badge variant="success" className="text-xs">Verified</Badge>
             </div>
           </div>
-
-          <InputField
-            label="New Email Address"
-            type="email"
-            value={newEmail}
-            onChange={(e) => setNewEmail(e.target.value)}
-            icon={Mail}
-            placeholder="Enter new email address"
-            error={emailError}
-          />
-
-          <Button
-            onClick={handleEmailChange}
-            loading={loading}
-            disabled={!newEmail || loading || newEmail === user?.email}
-            icon={Check}
+          <button
+            disabled={true}
+            className="px-4 py-2 rounded-xl font-medium transition-all duration-200 
+              bg-gradient-to-r from-indigo-600/40 to-purple-600/40 text-white/50
+              border border-gray-700/50 opacity-50 cursor-not-allowed"
           >
-            Change Email
-          </Button>
+            Confirm Email
+          </button>
         </div>
       </Card>
-
-      <Modal 
-        isOpen={showVerification} 
+ 
+      <Modal
+        isOpen={showEditModal}
         onClose={() => {
-          setShowVerification(false);
-          setVerificationCode('');
-          setVerificationError('');
+          setShowEditModal(false);
+          setSuccessMessage('');
+          setErrorMessage('');
         }}
-        title="Verify New Email"
+        title={successMessage ? 'Success!' : 'Change Username'}
       >
-        <div className="space-y-6">
-          <div className="text-center">
-            <Mail className="mx-auto h-12 w-12 text-indigo-400" />
-            <h3 className="mt-4 text-lg font-medium text-white">
-              Verify Your New Email
-            </h3>
-            <p className="mt-2 text-sm text-gray-400">
-              We've sent a verification code to {newEmail}.<br/>
-              Please enter the code below to verify your email.
-            </p>
-          </div>
-
-          <InputField
-            value={verificationCode}
-            onChange={(e) => setVerificationCode(e.target.value)}
-            placeholder="Enter verification code"
-            error={verificationError}
-          />
-
-          <Button
-            onClick={handleVerify}
-            loading={loading}
-            className="w-full"
-            disabled={!verificationCode || loading}
-          >
-            Verify Email
-          </Button>
-        </div>
-      </Modal>
-
-      <Modal 
-        isOpen={showReauth} 
-        onClose={() => {
-          setShowReauth(false);
-          setPassword('');
-          setVerificationError('');
-        }}
-        title="Confirm Password"
-      >
-        <div className="space-y-6">
-          <div className="text-center">
-            <p className="mt-2 text-sm text-gray-400">
-              Please enter your current password to confirm the email change.
-            </p>
-          </div>
-
-          <InputField
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Enter your password"
-            error={verificationError}
-          />
-
-          <Button
-            onClick={handleReauth}
-            loading={loading}
-            className="w-full"
-            disabled={!password || loading}
-          >
-            Confirm
-          </Button>
-        </div>
-      </Modal>
-
-      <Card title="Phone Number" icon={Phone}>
-        <div className="space-y-6">
-          <div className="grid grid-cols-4 gap-6">
-            <div>
-              <InputField
-                label="Country Code"
-                value={countryCode}
-                onChange={(e) => setCountryCode(e.target.value)}
-                icon={Globe}
-              />
+        {successMessage ? (
+          <div className="p-6 text-center">
+            <div className="w-12 h-12 rounded-full bg-green-500/10 flex items-center justify-center mx-auto mb-4">
+              <Check className="h-6 w-6 text-green-500" />
             </div>
-            <div className="col-span-3">
+            <p className="text-green-500">{successMessage}</p>
+          </div>
+        ) : (
+          <div className="min-w-[400px] p-6">
+            <p className="text-gray-400 text-sm mb-6">
+              This username will be visible to other players on NayaPlay.
+            </p>
+            
+            <div className="space-y-4">
               <InputField
-                label="Phone Number"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                icon={Phone}
-                placeholder="Enter your phone number"
+                type="text"
+                value={newUsername}
+                onChange={(e) => {
+                  setNewUsername(e.target.value);
+                  checkUsername(e.target.value);
+                }}
+                icon={User}
+                placeholder="Enter new username"
               />
+
+              {newUsername && (
+                <p className={`text-sm flex items-center gap-2 ${
+                  usernameStatus.isAvailable ? 'text-green-500' : 'text-red-500'
+                }`}>
+                  {usernameStatus.isAvailable ? <Check size={14} /> : <X size={14} />}
+                  {usernameStatus.message}
+                </p>
+              )}
+
+              <div className="flex gap-3 mt-6">
+                <Button
+                  variant="secondary"
+                  onClick={() => setShowEditModal(false)}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleUsernameUpdate}
+                  loading={loading}
+                  disabled={!newUsername || !usernameStatus.isAvailable || loading}
+                  className="flex-1"
+                >
+                  Save
+                </Button>
+              </div>
             </div>
           </div>
-          <Button 
-            onClick={handlePhoneUpdate}
-            loading={loading}
-            icon={Check}
-          >
-            Update Phone
-          </Button>
-        </div>
-      </Card>
+        )}
+      </Modal>
     </div>
   );
 };
 
+ // Separate PasswordInput component
+const PasswordInput = ({ label, value, onChange, showPassword, onToggleVisibility, required }) => (
+  <div className="space-y-2">
+    <div className="flex items-center justify-between">
+      <label className="text-gray-300">
+        {label}
+        {required && <span className="text-red-500 ml-1">*</span>}
+      </label>
+    </div>
+    <div className="relative">
+      <input
+        type={showPassword ? 'text' : 'password'}
+        value={value}
+        onChange={onChange}
+        className="w-full bg-gray-900/50 text-white px-4 py-3 rounded-lg
+          border border-gray-700/50
+          focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 
+          transition-all duration-200"
+      />
+      <button
+        type="button"
+        onClick={onToggleVisibility}
+        className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-300 transition-colors"
+      >
+        {showPassword ? (
+          <EyeOff size={18} className="transition-all duration-200" />
+        ) : (
+          <Eye size={18} className="transition-all duration-200" />
+        )}
+      </button>
+    </div>
+  </div>
+);
+
 export const SecuritySettings = () => {
+  const [loading, setLoading] = useState(false);
+  const [oldPassword, setOldPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [showOldPassword, setShowOldPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [passwords, setPasswords] = useState({
-    old: '',
-    new: '',
-    confirm: ''
-  });
-
-  const handlePasswordChange = (field) => (e) => {
-    setPasswords(prev => ({
-      ...prev,
-      [field]: e.target.value
-    }));
-  };
 
   const updateUserPassword = async () => {
-    if (passwords.new !== passwords.confirm) {
+    if (newPassword !== confirmPassword) {
       alert("New passwords don't match!");
       return;
     }
@@ -563,13 +520,15 @@ export const SecuritySettings = () => {
       
       const credential = EmailAuthProvider.credential(
         user.email,
-        passwords.old
+        oldPassword
       );
       await reauthenticateWithCredential(user, credential);
-      await updatePassword(user, passwords.new);
+      await updatePassword(user, newPassword);
       
       alert('Password updated successfully!');
-      setPasswords({ old: '', new: '', confirm: '' });
+      setOldPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
     } catch (error) {
       console.error('Error updating password:', error);
       if (error.code === 'auth/wrong-password') {
@@ -583,83 +542,452 @@ export const SecuritySettings = () => {
   };
 
   return (
-    <Card title="Change Password" icon={Key}>
-      <div className="space-y-6">
-        <InputField
-          label="Current Password"
-          type={showOldPassword ? 'text' : 'password'}
-          value={passwords.old}
-          onChange={handlePasswordChange('old')}
-          icon={Key}
-          placeholder="Enter your current password"
+    <div className="bg-gray-900/30 rounded-xl p-6">
+      <h2 className="text-xl text-white font-medium mb-6">Password</h2>
+      <div className="space-y-4">
+        <PasswordInput
+          label="Old Password"
+          value={oldPassword}
+          onChange={(e) => setOldPassword(e.target.value)}
+          showPassword={showOldPassword}
+          onToggleVisibility={() => setShowOldPassword(!showOldPassword)}
+          required
         />
 
-        <InputField
+        <PasswordInput
           label="New Password"
-          type={showNewPassword ? 'text' : 'password'}
-          value={passwords.new}
-          onChange={handlePasswordChange('new')}
-          icon={Key}
-          placeholder="Enter your new password"
+          value={newPassword}
+          onChange={(e) => setNewPassword(e.target.value)}
+          showPassword={showNewPassword}
+          onToggleVisibility={() => setShowNewPassword(!showNewPassword)}
+          required
         />
 
-        <InputField
+        <PasswordInput
           label="Confirm New Password"
-          type={showConfirmPassword ? 'text' : 'password'}
-          value={passwords.confirm}
-          onChange={handlePasswordChange('confirm')}
-          icon={Key}
-          placeholder="Confirm your new password"
+          value={confirmPassword}
+          onChange={(e) => setConfirmPassword(e.target.value)}
+          showPassword={showConfirmPassword}
+          onToggleVisibility={() => setShowConfirmPassword(!showConfirmPassword)}
+          required
         />
 
-        <Button 
-          onClick={updateUserPassword}
-          loading={loading}
-          disabled={!passwords.old || !passwords.new || !passwords.confirm}
-        >
-          Update Password
-        </Button>
+        <div className="flex justify-end pt-2">
+          <button
+            onClick={updateUserPassword}
+            disabled={loading || !oldPassword || !newPassword || !confirmPassword}
+            className="px-8 py-2.5 rounded-lg font-medium transition-all duration-200
+              bg-gradient-to-r from-indigo-600 to-purple-600 text-white 
+              hover:from-indigo-500 hover:to-purple-500
+              disabled:opacity-50 disabled:cursor-not-allowed
+              disabled:hover:from-indigo-600 disabled:hover:to-purple-600"
+          >
+            {loading ? 'Saving...' : 'Save'}
+          </button>
+        </div>
       </div>
-    </Card>
+    </div>
   );
 };
 
-export const SessionsSettings = () => {
-  const sessions = [
-    {
-      id: 1,
-      browser: "Chrome (Unknown)",
-      location: "UA, Kyiv",
-      ip: "149.88.110.18",
-      lastUsed: "17 minutes ago",
-      isCurrent: true
+
+
+
+
+const PreferencesSettings = () => {
+  const { user } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [preferences, setPreferences] = useState({
+    ghostMode: false,
+    hideStats: false,
+    hideRaceStats: false,
+    excludeRain: false,
+    emailOffers: false,
+    smsOffers: false
+  });
+
+  // Use onSnapshot to listen for real-time updates
+  useEffect(() => {
+    if (!user) return;
+
+    setLoading(true);
+    
+    // Set up real-time listener for user preferences
+    const unsubscribe = onSnapshot(
+      doc(db, 'users', user.uid),
+      (doc) => {
+        if (doc.exists()) {
+          const userData = doc.data();
+          setPreferences({
+            ghostMode: userData.ghostMode ?? false,
+            hideStats: userData.hideStats ?? false,
+            hideRaceStats: userData.hideRaceStats ?? false,
+            excludeRain: userData.excludeRain ?? false,
+            emailOffers: userData.emailOffers ?? false,
+            smsOffers: userData.smsOffers ?? false
+          });
+        }
+        setLoading(false);
+      },
+      (error) => {
+        console.error('Error fetching preferences:', error);
+        setLoading(false);
+      }
+    );
+
+    // Cleanup subscription
+    return () => unsubscribe();
+  }, [user]);
+
+  const handlePreferenceChange = async (key) => {
+    if (!user) return;
+
+    try {
+      const newValue = !preferences[key];
+      
+      // Update Firestore first
+      await updateDoc(doc(db, 'users', user.uid), {
+        [key]: newValue
+      });
+
+      // State will be automatically updated by the onSnapshot listener
+    } catch (error) {
+      console.error('Error updating preference:', error);
+      // Show error to user (you might want to add a toast notification here)
     }
-  ];
+  };
+
+  const ToggleSwitch = ({ checked, onChange }) => (
+    <button
+      onClick={onChange}
+      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 focus:outline-none
+        ${checked ? 'bg-indigo-600' : 'bg-gray-700'}`}
+    >
+      <span
+        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200
+          ${checked ? 'translate-x-6' : 'translate-x-1'}`}
+      />
+    </button>
+  );
+
+  const PreferenceItem = ({ title, description, checked, onChange }) => (
+    <div className="flex items-center justify-between py-4">
+      <div className="space-y-1">
+        <h4 className="text-sm font-medium text-white flex items-center">
+          {title}
+        </h4>
+        <p className="text-sm text-gray-400 ml-0">{description}</p>
+      </div>
+      <ToggleSwitch checked={checked} onChange={onChange} />
+    </div>
+  );
+
+  if (loading) {
+    return <div className="text-center text-gray-400">Loading preferences...</div>;
+  }
 
   return (
-    <Card title="Active Sessions" icon={History}>
-      <div className="space-y-4">
-        {sessions.map((session) => (
-          <div 
-            key={session.id} 
-            className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10"
-          >
-            <div className="space-y-1">
-              <p className="font-medium text-white">{session.browser}</p>
-              <p className="text-sm text-white/60">{session.location} • {session.ip}</p>
-              <p className="text-sm text-white/40">Last active: {session.lastUsed}</p>
-            </div>
-            {session.isCurrent ? (
-              <Badge variant="primary">Current Session</Badge>
-            ) : (
-              <Button variant="danger" size="sm">End Session</Button>
-            )}
+    <div className="space-y-8">
+      {/* Privacy Section */}
+      <Card>
+        <div className="p-6">
+          <div className="flex items-center gap-3 mb-6">
+            <Globe className="h-5 w-5 text-indigo-400" />
+            <h3 className="text-lg font-medium text-white">Privacy</h3>
           </div>
-        ))}
-      </div>
-    </Card>
+          <div className="space-y-4 divide-y divide-gray-700/50">
+            <PreferenceItem
+              title="Enable Ghost Mode"
+              description="Your username will appear as 'Anonymous' in public bet feed"
+              checked={preferences.ghostMode}
+              onChange={() => handlePreferenceChange('ghostMode')}
+            />
+            <PreferenceItem
+              title="Hide all your statistics"
+              description="Other users won't be able to view your wins, losses and wagered statistics"
+              checked={preferences.hideStats}
+              onChange={() => handlePreferenceChange('hideStats')}
+            />
+          </div>
+        </div>
+      </Card>
+
+      {/* Community Section */}
+      <Card>
+        <div className="p-6">
+          <div className="flex items-center gap-3 mb-6">
+            <Bell className="h-5 w-5 text-indigo-400" />
+            <h3 className="text-lg font-medium text-white">Community</h3>
+          </div>
+          <div className="space-y-4">
+            <PreferenceItem
+              title="Exclude from rain"
+              description="Prevents you from receiving a rain in chat"
+              checked={preferences.excludeRain}
+              onChange={() => handlePreferenceChange('excludeRain')}
+            />
+          </div>
+        </div>
+      </Card>
+
+      {/* Marketing Section */}
+      <Card>
+        <div className="p-6">
+          <div className="flex items-center gap-3 mb-6">
+            <Mail className="h-5 w-5 text-indigo-400" />
+            <h3 className="text-lg font-medium text-white">Marketing</h3>
+          </div>
+          <div className="space-y-4 divide-y divide-gray-700/50">
+            <PreferenceItem
+              title="Receive email offers from us"
+              description="Choose if you wish to hear from us via email"
+              checked={preferences.emailOffers}
+              onChange={() => handlePreferenceChange('emailOffers')}
+            />
+            <PreferenceItem
+              title="Receive SMS offers from us"
+              description="Choose if you wish to hear from us via SMS"
+              checked={preferences.smsOffers}
+              onChange={() => handlePreferenceChange('smsOffers')}
+            />
+          </div>
+        </div>
+      </Card>
+    </div>
   );
 };
+
+
+export const SessionsSettings = () => {
+  const [filter, setFilter] = useState('All');
+  const [sessions, setSessions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const { user } = useAuth();
+
+  // Initialize or update session
+  useEffect(() => {
+    const handleSession = async () => {
+      if (!user) return;
+
+      try {
+        // Check for existing session from localStorage
+        const existingSessionId = localStorage.getItem('currentSessionId');
+        let sessionRef;
+
+        if (existingSessionId) {
+          // Try to get existing session
+          sessionRef = doc(db, 'sessions', existingSessionId);
+          const sessionDoc = await getDoc(sessionRef);
+
+          if (sessionDoc.exists()) {
+            // Update last active time
+            await setDoc(sessionRef, {
+              lastActive: serverTimestamp()
+            }, { merge: true });
+            return;
+          }
+        }
+
+        // If no valid existing session, create new one
+        const response = await fetch('https://api.ipify.org?format=json');
+        const { ip } = await response.json();
+        
+        const sessionId = `${user.uid}_${Date.now()}`;
+        sessionRef = doc(db, 'sessions', sessionId);
+        
+        await setDoc(sessionRef, {
+          userId: user.uid,
+          browser: 'Chrome (Unknown)',
+          ip: ip,
+          lastActive: serverTimestamp(),
+          createdAt: serverTimestamp(),
+          isActive: true
+        });
+
+        localStorage.setItem('currentSessionId', sessionId);
+      } catch (error) {
+        console.error('Error managing session:', error);
+      }
+    };
+
+    handleSession();
+
+    // Add visibility change listener
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        handleSession();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [user]);
+
+  // Fetch sessions
+  useEffect(() => {
+    const fetchSessions = async () => {
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        setError(null);
+
+        const sessionsRef = collection(db, 'sessions');
+        const q = query(sessionsRef, where('userId', '==', user.uid));
+        const querySnapshot = await getDocs(q);
+
+        const sessionData = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          lastActive: doc.data().lastActive?.toDate(),
+          createdAt: doc.data().createdAt?.toDate()
+        }));
+
+        // Sort sessions by last activity
+        sessionData.sort((a, b) => (b.lastActive || 0) - (a.lastActive || 0));
+        
+        setSessions(sessionData);
+      } catch (error) {
+        console.error('Error fetching sessions:', error);
+        setError('Error fetching sessions. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchSessions();
+  }, [user]);
+
+  // Handle session removal
+  const handleRemoveSession = async (sessionId) => {
+    try {
+      const currentSessionId = localStorage.getItem('currentSessionId');
+      if (sessionId === currentSessionId) {
+        alert("Cannot remove current session");
+        return;
+      }
+
+      await setDoc(doc(db, 'sessions', sessionId), {
+        isActive: false,
+        removedAt: serverTimestamp()
+      }, { merge: true });
+
+      setSessions(prev => prev.map(session => 
+        session.id === sessionId 
+          ? { ...session, isActive: false, removedAt: new Date() }
+          : session
+      ));
+    } catch (error) {
+      console.error('Error removing session:', error);
+    }
+  };
+
+  const formatLastActive = (date) => {
+    if (!date) return 'Unknown';
+    
+    const now = new Date();
+    const diffInMinutes = Math.floor((now - date) / (1000 * 60));
+    
+    if (diffInMinutes < 1) {
+      return 'Just now';
+    } else if (diffInMinutes < 60) {
+      return `${diffInMinutes} minute${diffInMinutes === 1 ? '' : 's'} ago`;
+    } else if (diffInMinutes < 1440) {
+      const hours = Math.floor(diffInMinutes / 60);
+      return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+    } else {
+      const days = Math.floor(diffInMinutes / 1440);
+      return `${days} day${days === 1 ? '' : 's'} ago`;
+    }
+  };
+
+  const filteredSessions = sessions.filter(session => {
+    if (filter === 'Active') return session.isActive;
+    if (filter === 'Inactive') return !session.isActive;
+    return true;
+  });
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-xl font-semibold text-white">Session Filter</h2>
+        <div className="relative">
+          <select
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            className="bg-gray-800/40 text-white px-4 py-2 rounded-lg border border-gray-700/50 
+              focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 
+              transition-all duration-200 appearance-none pr-10 cursor-pointer"
+          >
+            <option value="All">All</option>
+            <option value="Active">Active</option>
+            <option value="Inactive">Inactive</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-gray-700/50 overflow-hidden">
+        <div className="bg-gray-800/40 px-6 py-3 border-b border-gray-700/50">
+          <div className="grid grid-cols-4 gap-4">
+            <div className="text-sm font-medium text-gray-400">Browser</div>
+            <div className="text-sm font-medium text-gray-400">IP Address</div>
+            <div className="text-sm font-medium text-gray-400">Last Used</div>
+            <div className="text-sm font-medium text-gray-400">Action</div>
+          </div>
+        </div>
+
+        <div className="divide-y divide-gray-700/50">
+          {filteredSessions.length === 0 ? (
+            <div className="px-6 py-8 text-center text-gray-400">
+              No sessions found
+            </div>
+          ) : (
+            filteredSessions.map((session) => {
+              const isCurrentSession = session.id === localStorage.getItem('currentSessionId');
+              return (
+                <div 
+                  key={session.id} 
+                  className="px-6 py-4 bg-gray-800/20 hover:bg-gray-800/40 transition-colors duration-200"
+                >
+                  <div className="grid grid-cols-4 gap-4 items-center">
+                    <div className="text-sm text-white">{session.browser}</div>
+                    <div className="text-sm text-white/60">{session.ip}</div>
+                    <div className="text-sm text-white/60">
+                      {session.lastActive ? formatLastActive(session.lastActive) : 'Unknown'}
+                    </div>
+                    <div>
+                      {isCurrentSession ? (
+                        <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                          Current
+                        </span>
+                      ) : session.isActive ? (
+                        <button 
+                          className="text-red-400 hover:text-red-300 transition-colors duration-200 text-sm"
+                          onClick={() => handleRemoveSession(session.id)}
+                        >
+                          Remove Session
+                        </button>
+                      ) : (
+                        <span className="text-gray-500">Removed</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 
 export const IgnoredUsersSettings = () => {
   const [ignoredUsers, setIgnoredUsers] = useState([]);
@@ -947,7 +1275,7 @@ const SettingsPage = () => {
       case 'security':
         return <SecuritySettings />;
       case 'preferences':
-        return <Card title="Preferences" icon={Settings2}>Coming soon</Card>;
+        return <PreferencesSettings />;
       case 'sessions':
         return <SessionsSettings />;
       case 'ignored-users':
@@ -962,21 +1290,25 @@ const SettingsPage = () => {
   };
  
   return (
-    <div className="min-h-screen bg-gray-900">
+    <>
+        <div className="fixed inset-0 min-h-screen bg-gray-900 z-0" />
+    <div className="relative z-10 min-h-screen">
       <div className="h-40 bg-gradient-to-b from-indigo-500/10 to-transparent" />
       <div className="max-w-7xl mx-auto px-8 -mt-20">
         <div className="bg-gray-800/20 backdrop-blur-xl rounded-2xl border border-gray-700/50 shadow-2xl">
-          <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-indigo-500 to-transparent opacity-50" />
-          <div className="flex">
-            <SettingsSidebar currentSection={currentSection} />
-            <div className="flex-1 p-8 min-h-[calc(100vh-8rem)]">
-              {renderSection()}
+
+            <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-indigo-500 to-transparent opacity-50" />
+            <div className="flex">
+              <SettingsSidebar currentSection={currentSection} />
+              <div className="flex-1 p-8 min-h-[calc(100vh-8rem)]">
+                {renderSection()}
+              </div>
             </div>
+            <div className="absolute bottom-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-indigo-500 to-transparent opacity-50" />
           </div>
-          <div className="absolute bottom-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-indigo-500 to-transparent opacity-50" />
         </div>
       </div>
-    </div>
+    </>
   );
 };
 

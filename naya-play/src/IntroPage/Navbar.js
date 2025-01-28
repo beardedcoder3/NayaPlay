@@ -23,22 +23,40 @@ import { useError } from '../Error/ErrorContext';
 import { ErrorProvider } from '../Error/ErrorContext';
 import { serverTimestamp } from 'firebase/firestore';
 
-// GameSearch Component
+
 const GameSearch = ({ isOpen, onClose }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [searchResults, setSearchResults] = useState([]);
+  const [recentSearches, setRecentSearches] = useState(() => {
+    const saved = localStorage.getItem('recentGameSearches');
+    return saved ? JSON.parse(saved) : [];
+  });
   const searchRef = useRef(null);
   const navigate = useNavigate();
- 
 
-  const GAME_ROUTES = {
-    "Cyberpunk 2077": "/mines",
-    "God of War Ragnarök": "/limbo",
-    "Elden Ring": "/crash",
-    "Horizon Forbidden West": "/plinko",
-    "Spider-Man 2": "/wheel"
+  const GAMES = {
+    'MINES': {
+      route: '/mines',
+      image: 'https://mediumrare.imgix.net/15a51a2ae2895872ae2b600fa6fe8d7f8d32c9814766b66ddea2b288d04ba89c?format=auto&auto=format&q=90&w=334&dpr=2',
+      provider: 'NayaPlay Originals'
+    },
+    'DICE': {
+      route: '/dice',
+      image: 'https://mediumrare.imgix.net/30688668d7d2d48d472edd0f1e2bca0758e7ec51cbab8c04d8b7f157848640e0?format=auto&auto=format&q=90&w=334&dpr=2',
+      provider: 'NayaPlay Originals'
+    },
+    'LIMBO': {
+      route: '/limbo',
+      image: 'https://mediumrare.imgix.net/11caec5df20098884ae9071848e1951b8b34e5ec84a7241f2e7c5afd4b323dfd?format=auto&auto=format&q=90&w=334&dpr=2',
+      provider: 'NayaPlay Originals'
+    },
+    'CRASH': {
+      route: '/crash',
+      image: 'https://mediumrare.imgix.net/c830595cbd07b2561ac76a365c2f01869dec9a8fe5e7be30634d78c51b2cc91e?format=auto&auto=format&q=90&w=334&dpr=2',
+      provider: 'NayaPlay Originals'
+    }
   };
 
+  // Handle clicking outside to close
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (searchRef.current && !searchRef.current.contains(event.target)) {
@@ -50,67 +68,165 @@ const GameSearch = ({ isOpen, onClose }) => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [onClose]);
 
-  const handleSearch = (event) => {
-    const term = event.target.value;
-    setSearchTerm(term);
+  // Save recent searches to localStorage
+  useEffect(() => {
+    localStorage.setItem('recentGameSearches', JSON.stringify(recentSearches));
+  }, [recentSearches]);
 
-    if (term.trim() === '') {
-      setSearchResults([]);
-      return;
-    }
-
-    const results = Object.keys(GAME_ROUTES).filter(game =>
-      game.toLowerCase().includes(term.toLowerCase())
+  const getFilteredGames = () => {
+    if (!searchTerm || searchTerm.length < 3) return [];
+    return Object.entries(GAMES).filter(([name]) => 
+      name.toLowerCase().includes(searchTerm.toLowerCase())
     );
-    setSearchResults(results);
   };
 
-  const handleGameSelect = (game) => {
-    navigate(GAME_ROUTES[game]);
+  const handleGameSelect = (gameName) => {
+    // Add to recent searches if not already present
+    setRecentSearches(prev => {
+      const newSearches = prev.filter(s => s !== gameName);
+      return [gameName, ...newSearches].slice(0, 5);
+    });
+
+    navigate(GAMES[gameName].route);
     setSearchTerm('');
-    setSearchResults([]);
     onClose();
   };
+
+  const removeRecentSearch = (search, e) => {
+    e.stopPropagation();
+    setRecentSearches(prev => prev.filter(s => s !== search));
+  };
+
+  const clearAllSearches = (e) => {
+    e.stopPropagation();
+    setRecentSearches([]);
+  };
+
+  const filteredGames = getFilteredGames();
+  const showNoResults = searchTerm.length >= 3 && filteredGames.length === 0;
 
   return (
     <div 
       ref={searchRef}
-      className={`absolute right-0 top-16 mt-1 transition-all duration-300
+      className={`fixed top-16 left-0 right-0 z-50 transition-all duration-200 overflow-hidden
         ${isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
-      style={{ zIndex: 1000 }}
     >
-      <div className="w-64 px-2">
-        <input
-          type="text"
-          value={searchTerm}
-          onChange={handleSearch}
-          placeholder="Search games..."
-          className="w-full bg-gray-700 text-white px-4 py-2 rounded-lg 
-            focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          autoFocus={isOpen}
-        />
-        
-        {searchResults.length > 0 && (
-          <div className="absolute mt-2 w-60 bg-gray-800 rounded-lg shadow-xl 
-            border border-gray-700 overflow-hidden">
-            {searchResults.map((game) => (
-              <button
-                key={game}
-                onClick={() => handleGameSelect(game)}
-                className="w-full px-4 py-3 text-left text-gray-300 hover:bg-gray-700 
-                  transition-colors"
+      {isOpen && (
+        <div className="fixed inset-0 bg-black/20" onClick={onClose} />
+      )}
+      
+      <div className="relative">
+        <div 
+          className="mx-auto"
+          style={{ 
+            width: '800px',  // Adjust this value to fit your layout
+            margin: '0 auto',  // This will center it
+            paddingLeft: '1rem',
+            paddingRight: '1rem',
+            paddingTop: '1rem'
+          }}
+        >
+          {/* Search Input - Rounded */}
+          <div className="bg-[#0B1622] rounded-full border border-gray-800">
+            <div className="relative flex items-center px-4 py-2">
+              <Search className="w-5 h-5 text-gray-400 mr-2" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search your game"
+                className="w-full bg-transparent text-white outline-none text-base placeholder-gray-400"
+                autoFocus={isOpen}
+              />
+              <button 
+                onClick={onClose}
+                className="p-1.5 hover:bg-gray-800 rounded-lg transition-colors ml-2"
               >
-                {game}
+                <X size={18} className="text-gray-400" />
               </button>
-            ))}
+            </div>
           </div>
-        )}
+
+          {/* Content Area - Square */}
+          {(searchTerm.length >= 3 || (!searchTerm && recentSearches.length > 0)) && (
+            <div className="mt-2 bg-[#0B1622] rounded-lg border border-gray-800">
+              <div className="p-4">
+                {/* Search Message */}
+                {searchTerm && searchTerm.length < 3 && (
+                  <div className="text-center text-gray-400">
+                    Search requires at least 3 characters.
+                  </div>
+                )}
+
+                {/* No Results Message */}
+                {showNoResults && (
+                  <div className="text-center text-gray-400">
+                    No results found.
+                  </div>
+                )}
+
+                {/* Recent Searches */}
+                {!searchTerm && recentSearches.length > 0 && (
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-gray-400">Recent Searches</span>
+                      <button 
+                        onClick={clearAllSearches}
+                        className="text-indigo-400 hover:text-indigo-300 text-sm"
+                      >
+                        Clear Search ({recentSearches.length})
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {recentSearches.map((search) => (
+                        <div
+                          key={search}
+                          onClick={() => handleGameSelect(search)}
+                          className="group flex items-center bg-[#5d43f5] rounded-full pl-3 pr-2 py-1  
+                            cursor-pointer hover:bg-[#2A475E] transition-colors"
+                        >
+                          <span className="text-gray-300">{search}</span>
+                          <button
+                            onClick={(e) => removeRecentSearch(search, e)}
+                            className="ml-2 p-1 rounded-full hover:bg-gray-700 
+                              opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <X size={12} className="text-gray-400" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Search Results */}
+                {filteredGames.length > 0 && (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
+                    {filteredGames.map(([name, game]) => (
+                      <div
+                        key={name}
+                        onClick={() => handleGameSelect(name)}
+                        className="aspect-[3/4] rounded-lg overflow-hidden cursor-pointer 
+                          hover:scale-105 transition-transform duration-200"
+                      >
+                        <img
+                          src={game.image}
+                          alt={name}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
 };
-
-
 const VerificationModal = ({ email, onClose }) => {
   const [isChecking, setIsChecking] = useState(false);
   const [countdown, setCountdown] = useState(0);
@@ -720,15 +836,27 @@ const NavBar = () => {
     }
   };
 
-  const handleRegisterSubmit = async (formData) => {
+ // This is part of your RegisterModal component in Navbar.js
+ const handleRegisterSubmit = async (formData) => {
+  try {
+    // Set initial registration flag
+    sessionStorage.setItem('registrationInProgress', 'true');
+    
+    // Create Firebase Auth user
+    const userCredential = await createUserWithEmailAndPassword(
+      auth, 
+      formData.email, 
+      formData.password
+    );
+    const user = userCredential.user;
+
+    // Set session storage items before creating document
+    sessionStorage.setItem('userEmail', formData.email);
+    sessionStorage.setItem('userId', user.uid);
+    sessionStorage.setItem('requiresVerification', 'true');
+
     try {
-      localStorage.setItem('registrationInProgress', 'true');
-  
-      // 1. Create Firebase Auth user
-      const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
-      const user = userCredential.user;
-  
-      // 2. Create user document with notifications field
+      // Create user document
       await setDoc(doc(db, 'users', user.uid), {
         email: formData.email,
         username: formData.username.toLowerCase(),
@@ -742,9 +870,9 @@ const NavBar = () => {
         notifications: [],
         notificationsEnabled: true
       });
-  
-      // 3. Send verification email
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/generate-verification`, {
+
+      // Send verification email
+      const verificationResponse = await fetch(`${process.env.REACT_APP_API_URL}/api/generate-verification`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -755,33 +883,43 @@ const NavBar = () => {
           username: formData.username
         })
       });
-  
-      if (!response.ok) {
+
+      if (!verificationResponse.ok) {
         throw new Error('Failed to send verification email');
       }
-  
-      // 4. Set localStorage items
-      localStorage.setItem('requiresVerification', 'true');
-      localStorage.setItem('userEmail', formData.email);
-      localStorage.setItem('userId', user.uid);
-  
-      // 5. Close modal and navigate
+
+      // Close modal first
       setModalState('closed');
-      navigate('/verify-email', { replace: true });
-  
-    } catch (error) {
-      console.error('Registration error:', error);
-      localStorage.removeItem('registrationInProgress');
-      localStorage.removeItem('requiresVerification');
-      localStorage.removeItem('userEmail');
-      localStorage.removeItem('userId');
       
-      if (error.code === 'auth/email-already-in-use') {
-        throw new Error('Email already registered. Please login instead.');
-      }
-      throw new Error('Registration failed. Please try again.');
+      // Small delay before navigation to ensure modal is closed
+      setTimeout(() => {
+        // Use window.location instead of navigate to force a clean page load
+        window.location.href = '/verify-email';
+      }, 100);
+
+    } catch (error) {
+      // If document creation or verification email fails, delete the auth user
+      await user.delete();
+      throw error;
     }
-  };
+
+  } catch (error) {
+    // Clean up session storage
+    sessionStorage.clear();
+    
+    // Handle specific errors
+    if (error.code === 'auth/email-already-in-use') {
+      throw new Error('This email is already registered. Please try logging in instead.');
+    } else if (error.code === 'auth/invalid-email') {
+      throw new Error('Please enter a valid email address.');
+    } else if (error.code === 'auth/weak-password') {
+      throw new Error('Password should be at least 6 characters long.');
+    } else {
+      throw new Error(error.message || 'Registration failed. Please try again.');
+    }
+  }
+};
+
   const handleSetupWallet = async () => {
     try {
       if (!auth.currentUser) {
@@ -875,27 +1013,30 @@ const NavBar = () => {
                 </div>
 
                 <div className="flex items-center space-x-4">
-                  <div className="relative">
-                    <button 
-                      onClick={() => {
-                        setIsSearchOpen(!isSearchOpen);
-                        setIsNotificationsOpen(false);
-                        setIsProfileOpen(false);
-                      }}
-                      className="p-1.5 hover:bg-gray-700 rounded-lg transition-colors"
-                    >
-                      <Search 
-                        size={20} 
-                        className={`transition-colors duration-200 ${
-                          isSearchOpen ? 'text-indigo-400' : 'text-gray-300 hover:text-white'
-                        }`}
-                      />
-                    </button>
-                    <GameSearch 
-                      isOpen={isSearchOpen} 
-                      onClose={() => setIsSearchOpen(false)} 
-                    />
-                  </div>
+                <div className="relative right-0">
+  <button 
+    onClick={() => {
+      setIsSearchOpen(!isSearchOpen);
+      setIsNotificationsOpen(false);
+      setIsProfileOpen(false);
+    }}
+    className="p-1.5 hover:bg-gray-700 rounded-lg transition-colors"
+  >
+    <Search 
+      size={20} 
+      className={`transition-colors duration-200 ${
+        isSearchOpen ? 'text-indigo-400' : 'text-gray-300 hover:text-white'
+      }`}
+    />
+  </button>
+  {isSearchOpen && (
+    <div className="fixed inset-0 bg-black/20" onClick={() => setIsSearchOpen(false)} />
+  )}
+  <GameSearch 
+    isOpen={isSearchOpen} 
+    onClose={() => setIsSearchOpen(false)} 
+  />
+</div>
 
                   <div className="relative">
                     <button 

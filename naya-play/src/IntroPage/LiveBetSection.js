@@ -86,12 +86,10 @@ const BetTable = ({ title, bets, icon: Icon, isHighRoller }) => {
                   </span>
                 </td>
                 <td className="px-6 py-4">
-                  <span className={`font-medium ${
-                    isHighRoller ? 'text-amber-400' : 'text-[#0072ce]'
-                  }`}>
-                    {bet.multiplier}x
-                  </span>
-                </td>
+  <span className={`font-medium ${parseFloat(bet.multiplier) === 0 ? 'text-red-500' : isHighRoller ? 'text-amber-400' : 'text-[#0072ce]'}`}>
+    {bet.multiplier}x
+  </span>
+</td>
                 <td className="px-6 py-4">
                   <span className={`font-medium px-3 py-1 rounded-full ${
                     parseFloat(bet.payout) >= 0 

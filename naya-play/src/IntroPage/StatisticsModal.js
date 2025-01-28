@@ -1,56 +1,76 @@
 import React, { useState, useEffect } from 'react';
 import { X, LineChart, DollarSign, Trophy, Target } from 'lucide-react';
 import { auth, db } from '../firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 
 const StatisticsModal = ({ isOpen, onClose, userId }) => {
   const [stats, setStats] = useState({
     totalBets: 0,
     wins: 0,
     losses: 0,
-    wagered: 0,
+    totalWagered: 0,
     totalWon: 0
   });
   const [loading, setLoading] = useState(true);
+  const [userData, setUserData] = useState(null);
 
   useEffect(() => {
-    const fetchStats = async () => {
+    const fetchUserData = async () => {
       if (!userId) return;
 
       try {
-        setLoading(true);
-        const userRef = doc(db, 'users', userId);
-        const userSnap = await getDoc(userRef);
+        const userDoc = await getDoc(doc(db, 'users', userId));
+        if (userDoc.exists()) {
+          setUserData(userDoc.data());
+        }
 
-        if (userSnap.exists()) {
-          const userData = userSnap.data();
-          // Directly access stats object
-          const userStats = userData.stats || {};
+        // Only fetch stats if user hasn't hidden them
+        if (!userDoc.data()?.hideStats) {
+          const betsRef = collection(db, 'users', userId, 'bets');
+          const betsSnapshot = await getDocs(betsRef);
+          
+          let totalBets = 0;
+          let wins = 0;
+          let losses = 0;
+          let totalWagered = 0;
+          let totalWon = 0;
+
+          betsSnapshot.forEach((doc) => {
+            const bet = doc.data();
+            totalBets++;
+            totalWagered += bet.betAmount || 0;
+            
+            if (bet.status === 'won') {
+              wins++;
+              totalWon += bet.payout || 0;
+            } else if (bet.status === 'lost') {
+              losses++;
+            }
+          });
 
           setStats({
-            totalBets: userStats.totalBets || 0,
-            wins: userStats.wins || 0,
-            losses: userStats.losses || 0,
-            wagered: parseFloat(userStats.wagered || 0),
-            totalWon: parseFloat(userStats.totalWon || 0)
+            totalBets,
+            wins,
+            losses,
+            totalWagered,
+            totalWon
           });
         }
       } catch (error) {
-        console.error('Error fetching stats:', error);
+        console.error('Error fetching data:', error);
       } finally {
         setLoading(false);
       }
     };
 
     if (isOpen) {
-      fetchStats();
+      fetchUserData();
     }
   }, [isOpen, userId]);
 
   if (!isOpen) return null;
 
-  // Calculate profit/loss
-  const profitLoss = stats.totalWon - stats.wagered;
+  const profitLoss = stats.totalWon - stats.totalWagered;
 
   return (
     <div className="fixed inset-0 z-50">
@@ -77,6 +97,12 @@ const StatisticsModal = ({ isOpen, onClose, userId }) => {
               <div className="flex justify-center items-center h-48">
                 <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-[#6366F1]"></div>
               </div>
+            ) : userData?.hideStats ? (
+              <div className="flex flex-col items-center justify-center py-12">
+                <Target size={48} className="text-[#94A3B8] mb-4" />
+                <p className="text-white text-lg mb-2">{userData.username}</p>
+                <p className="text-[#94A3B8]">This user has chosen to keep their statistics private</p>
+              </div>
             ) : (
               <div className="space-y-6">
                 <div className="grid grid-cols-2 gap-4">
@@ -100,7 +126,7 @@ const StatisticsModal = ({ isOpen, onClose, userId }) => {
                       <div>
                         <p className="text-sm text-[#94A3B8]">Total Wagered</p>
                         <p className="text-lg font-bold text-white">
-                          ${stats.wagered.toLocaleString()}
+                          ${stats.totalWagered.toLocaleString()}
                         </p>
                       </div>
                     </div>
@@ -143,7 +169,7 @@ const StatisticsModal = ({ isOpen, onClose, userId }) => {
                   <div className="flex justify-between items-center">
                     <span className="text-[#94A3B8]">Total Profit/Loss</span>
                     <span className={`text-lg font-bold ${profitLoss >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      {profitLoss >= 0 ? '+' : ''}{profitLoss.toLocaleString()}
+                      ${profitLoss >= 0 ? '+' : ''}{profitLoss.toLocaleString()}
                     </span>
                   </div>
                 </div>
