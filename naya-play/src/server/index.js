@@ -629,6 +629,78 @@ app.post('/api/send-marketing-email', async (req, res) => {
 });
 
 
+
+
+
+
+// Bonus Email Configuration
+const bonusTransporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST,
+  port: parseInt(process.env.SMTP_PORT),
+  secure: false,
+  auth: {
+    user: 'bonus@nayaplay.co',
+    pass: process.env.SMTP_BONUS_PASSWORD
+  },
+  requireTLS: true,
+  debug: true
+});
+
+// Verify bonus email configuration
+bonusTransporter.verify(function(error, success) {
+  if (error) {
+    console.error('Bonus SMTP Connection Error:', error);
+  } else {
+    console.log('Bonus SMTP Server ready');
+  }
+});
+
+// Add this new endpoint for sending bonus emails
+app.post('/api/send-bonus-email', async (req, res) => {
+  const { subject, htmlContent, recipients } = req.body;
+  
+  try {
+    if (!subject || !htmlContent || !recipients || !Array.isArray(recipients)) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Missing or invalid required fields' 
+      });
+    }
+
+    // Send email to each recipient
+    const results = await Promise.all(recipients.map(async (recipient) => {
+      const mailOptions = {
+        from: '"NayaPlay Bonus" <bonus@nayaplay.co>',
+        to: recipient,
+        subject: subject,
+        html: htmlContent
+      };
+
+      return bonusTransporter.sendMail(mailOptions);
+    }));
+
+    res.json({ 
+      success: true, 
+      messageIds: results.map(r => r.messageId)
+    });
+    
+  } catch (error) {
+    console.error('Bonus email error:', {
+      message: error.message,
+      code: error.code,
+      command: error.command,
+      response: error.response
+    });
+    
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to send bonus email',
+      details: error.message
+    });
+  }
+});
+
+
 // Start first game
 startNewGame();
 

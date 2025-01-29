@@ -39,13 +39,14 @@ const AuthFlow = () => {
   
       await setDoc(doc(db, 'users', user.uid), {
         email: formData.email,
-        username: formData.username,  // Remove toLowerCase()
+        username: formData.username,
         dateOfBirth: formData.dateOfBirth,
         createdAt: serverTimestamp(),
         emailVerified: false,
         balance: 0,
         lastActive: serverTimestamp(),
-        status: 'active'
+        status: 'active',
+        emailOffers: true  // Explicitly set to true
       });
   
       await fetch(`${process.env.REACT_APP_API_URL}/api/generate-verification`, {
@@ -118,28 +119,26 @@ const AuthFlow = () => {
     try {
       setIsRegistering(true);
       const provider = new GoogleAuthProvider();
-      provider.setCustomParameters({
-        prompt: 'select_account'
-      });
+      provider.setCustomParameters({ prompt: 'select_account' });
       
-      // First check if user exists before trying to write
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
       
-      // Important: Create basic user document first
       await setDoc(doc(db, 'users', user.uid), {
         email: user.email,
         username: user.email.split('@')[0].toLowerCase(),
         displayUsername: user.displayName || user.email.split('@')[0],
-        dateOfBirth: '', // Required field in rules
+        dateOfBirth: '',
         createdAt: serverTimestamp(),
         emailVerified: true,
         balance: 0,
         lastActive: serverTimestamp(),
         status: 'active',
-        notifications: [], // Required field in rules
-        notificationsEnabled: true // Required field in rules
+        notifications: [],
+        notificationsEnabled: true,
+        emailOffers: true  // Explicitly set to true
       }, { merge: true });
+  
   
       // Then create googleUsers document
       await setDoc(doc(db, 'googleUsers', user.uid), {

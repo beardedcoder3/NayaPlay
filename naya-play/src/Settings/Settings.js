@@ -602,7 +602,7 @@ const PreferencesSettings = () => {
     hideStats: false,
     hideRaceStats: false,
     excludeRain: false,
-    emailOffers: false,
+    emailOffers: true,
     smsOffers: false
   });
 
@@ -623,7 +623,7 @@ const PreferencesSettings = () => {
             hideStats: userData.hideStats ?? false,
             hideRaceStats: userData.hideRaceStats ?? false,
             excludeRain: userData.excludeRain ?? false,
-            emailOffers: userData.emailOffers ?? false,
+            emailOffers: userData.emailOffers ?? true, // Default to true if not set
             smsOffers: userData.smsOffers ?? false
           });
         }
@@ -645,15 +645,15 @@ const PreferencesSettings = () => {
     try {
       const newValue = !preferences[key];
       
-      // Update Firestore first
+      // Update Firestore
       await updateDoc(doc(db, 'users', user.uid), {
         [key]: newValue
       });
 
-      // State will be automatically updated by the onSnapshot listener
+      // No need to manually update state as onSnapshot will handle it
     } catch (error) {
       console.error('Error updating preference:', error);
-      // Show error to user (you might want to add a toast notification here)
+      // You could add error handling UI here if needed
     }
   };
 
@@ -685,7 +685,7 @@ const PreferencesSettings = () => {
   if (loading) {
     return <div className="text-center text-gray-400">Loading preferences...</div>;
   }
-
+  
   return (
     <div className="space-y-8">
       {/* Privacy Section */}
@@ -745,7 +745,7 @@ const PreferencesSettings = () => {
               onChange={() => handlePreferenceChange('emailOffers')}
             />
             <PreferenceItem
-              title="Receive SMS offers from us"
+              title="Receive Bonus offers from us"
               description="Choose if you wish to hear from us via SMS"
               checked={preferences.smsOffers}
               onChange={() => handlePreferenceChange('smsOffers')}

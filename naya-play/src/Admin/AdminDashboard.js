@@ -18,7 +18,8 @@ import {
   Building,
   CreditCard,
   Check,
-  X
+  X,
+  Mail
 } from 'lucide-react';
 import DashboardOverview from './components/Dashboard';
 import UserManagement from './components/UserManagement';
@@ -31,6 +32,9 @@ import SupportAgentManagement from '../LiveSupportSystem/SupportAgentManagement'
 import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from '../firebase';
 import { collection, query, where, orderBy, getDocs } from 'firebase/firestore';
+import MarketingEmailManager from './components/MarketingEmail';
+import BonusEmailManager from './components/BonusEmailManager';
+
 
 const MENU_ITEMS = [
   {
@@ -77,7 +81,19 @@ const MENU_ITEMS = [
     icon: HeadphonesIcon,
     path: `${ADMIN_CONFIG.SECURE_PATH}/dashboard/support-agents`,
     baseRoute: 'support-agents'
-  }
+  },
+  {
+    title: 'Marketing',
+    icon: Mail,
+    path: `${ADMIN_CONFIG.SECURE_PATH}/dashboard/marketing`,
+    baseRoute: 'marketing'
+  },
+  {
+    title: 'Bonus Email',
+    icon: Gift,
+    path: `${ADMIN_CONFIG.SECURE_PATH}/dashboard/bonus-email`,
+    baseRoute: 'bonus-email'
+  },
 ];
 
 const WithdrawalRequests = () => {
@@ -382,7 +398,7 @@ const AdminDashboard = () => {
 
       <div className="flex items-center space-x-4">
         <button className="p-2 hover:bg-white/10 rounded-full transition-all duration-300 relative">
-          <MessageCircle size={24} className="text-gray-400" />
+          <MessageCircle size={24} className="text-gray-400" />02\41
           <span className="absolute top-0 right-0 w-2 h-2 bg-blue-500 rounded-full" />
         </button>
         <button 
@@ -500,6 +516,8 @@ const AdminDashboard = () => {
             <Route path="support" element={<AdminSupportDashboard />} />
             <Route path="agents" element={<AgentManagement />} />
             <Route path="support-agents" element={<SupportAgentManagement />} />
+            <Route path="marketing" element={<MarketingEmailManager />} />
+            <Route path="bonus-email" element={<BonusEmailManager />} />
           </Routes>
         </div>
       </div>
