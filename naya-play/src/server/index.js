@@ -30,7 +30,6 @@ const snsClient = new SNSClient({
 console.log('AWS Region:', process.env.AWS_REGION);
 console.log('AWS Access Key ID:', process.env.AWS_ACCESS_KEY_ID?.slice(0, 5) + '...');
 
-
 // Initialize Firebase Admin with environment variables
 const serviceAccount = {
   type: process.env.FIREBASE_TYPE,
@@ -56,8 +55,6 @@ const httpServer = createServer(app);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-
-
 // Socket.IO setup
 const io = new Server(httpServer, {
   cors: {
@@ -75,20 +72,13 @@ const io = new Server(httpServer, {
 });
 
 // Middleware
-// Update your CORS configuration
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST'],
   allowedHeaders: ['Content-Type']
 }));
 
-
 // Email Configuration
-// Email Configuration
-// Email Configuration
-// Email Configuration
-// Email Configuration
-// Initialize transporter once
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
   port: parseInt(process.env.SMTP_PORT),
@@ -97,65 +87,30 @@ const transporter = nodemailer.createTransport({
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASSWORD
   },
-  pool: true, // Enable pooling
-  maxConnections: 5, // Allow multiple connections
-  maxMessages: 100, // Maximum messages per connection
-  rateDelta: 1000, // How many milliseconds between messages
-  rateLimit: 5 // Max number of messages during rateDelta
+  pool: true,
+  maxConnections: 10,
+  maxMessages: 200,
+  rateDelta: 1000,
+  rateLimit: 10
 });
+
+// Cache verification template
+const getVerificationEmailTemplate = (username, code) => `
+  <div style="background-color: #1a1b1e; color: #ffffff; padding: 20px; border-radius: 10px;">
+    <h1 style="color: #4f46e5;">Welcome to NayaPlay!</h1>
+    <p>Hello ${username},</p>
+    <p>Your verification code is:</p>
+    <div style="background-color: #2d2e33; padding: 20px; border-radius: 5px; text-align: center; margin: 20px 0;">
+      <span style="font-size: 32px; letter-spacing: 5px; font-family: monospace;">${code}</span>
+    </div>
+    <p>This code will expire in 10 minutes.</p>
+  </div>
+`;
 
 // One-time verification at startup
 transporter.verify()
   .then(() => console.log('SMTP ready'))
   .catch(err => console.error('SMTP Error:', err.message));
-
-// Optimized verification endpoint
-app.post('/api/generate-verification', async (req, res) => {
-  const { email, userId, username } = req.body;
-  
-  try {
-    // Generate code and save to Firebase concurrently
-    const verificationCode = generateVerificationCode();
-    await Promise.all([
-      firebaseAdmin.firestore()
-        .collection('verificationCodes')
-        .doc(userId)
-        .set({
-          code: verificationCode,
-          email,
-          userId,
-          createdAt: firebaseAdmin.firestore.FieldValue.serverTimestamp(),
-          expiresAt: new Date(Date.now() + 10 * 60 * 1000)
-        }),
-      
-      transporter.sendMail({
-        from: '"NayaPlay" <noreply@nayaplay.co>',
-        to: email,
-        subject: 'Verify Your NayaPlay Account',
-        html: `
-          <div style="background-color: #1a1b1e; color: #ffffff; padding: 20px; border-radius: 10px;">
-            <h1 style="color: #4f46e5;">Welcome to NayaPlay!</h1>
-            <p>Hello ${username},</p>
-            <p>Your verification code is:</p>
-            <div style="background-color: #2d2e33; padding: 20px; border-radius: 5px; text-align: center; margin: 20px 0;">
-              <span style="font-size: 32px; letter-spacing: 5px; font-family: monospace;">${verificationCode}</span>
-            </div>
-            <p>This code will expire in 10 minutes.</p>
-          </div>
-        `
-      })
-    ]);
-
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Verification error:', error.message);
-    res.status(500).json({ 
-      error: 'Failed to send verification email',
-      details: error.message
-    });
-  }
-});
-
 
 // Helper Functions
 function generateVerificationCode() {
@@ -258,72 +213,54 @@ io.on('connection', (socket) => {
 });
 
 // API Routes
-// Generate Email Verification Code Endpoint
+// Generate Email Verification Code Endpoint (Optimized version)
 app.post('/api/generate-verification', async (req, res) => {
-  console.log('Starting verification request:', req.body);
   const { email, userId, username } = req.body;
   
+  if (!email || !userId || !username) {
+    return res.status(400).json({ 
+      error: 'Missing required fields'
+    });
+  }
+
   try {
-    // 1. Generate verification code
-    console.log('Generating verification code...');
     const verificationCode = generateVerificationCode();
-    console.log('Generated code:', { userId, code: verificationCode });
+    const verificationData = {
+      code: verificationCode,
+      email,
+      userId,
+      createdAt: firebaseAdmin.firestore.FieldValue.serverTimestamp(),
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000)
+    };
 
-    // 2. Save to Firebase
-    console.log('Saving to Firebase...');
-    await firebaseAdmin.firestore()
-      .collection('verificationCodes')
-      .doc(userId)
-      .set({
-        code: verificationCode,
-        email,
-        userId,
-        createdAt: firebaseAdmin.firestore.FieldValue.serverTimestamp(),
-        expiresAt: new Date(Date.now() + 10 * 60 * 1000)
-      });
-    console.log('Saved to Firebase successfully');
-
-    // 3. Prepare email
-    console.log('Preparing email...');
     const mailOptions = {
       from: '"NayaPlay" <noreply@nayaplay.co>',
       to: email,
       subject: 'Verify Your NayaPlay Account',
-      html: `
-        <div style="background-color: #1a1b1e; color: #ffffff; padding: 20px; border-radius: 10px;">
-          <h1 style="color: #4f46e5;">Welcome to NayaPlay!</h1>
-          <p>Hello ${username},</p>
-          <p>Your verification code is:</p>
-          <div style="background-color: #2d2e33; padding: 20px; border-radius: 5px; text-align: center; margin: 20px 0;">
-            <span style="font-size: 32px; letter-spacing: 5px; font-family: monospace;">${verificationCode}</span>
-          </div>
-          <p>This code will expire in 10 minutes.</p>
-        </div>
-      `
+      html: getVerificationEmailTemplate(username, verificationCode)
     };
-    console.log('Email prepared:', { to: email, subject: mailOptions.subject });
 
-    // 4. Send email
-    console.log('Sending email...');
-    const info = await transporter.sendMail(mailOptions);
-    console.log('Email sent successfully:', info.messageId);
+    // Execute Firebase write and email send in parallel
+    await Promise.all([
+      firebaseAdmin.firestore()
+        .collection('verificationCodes')
+        .doc(userId)
+        .set(verificationData),
+      transporter.sendMail(mailOptions)
+    ]);
 
     res.json({ success: true });
+    
   } catch (error) {
-    console.error('Detailed error in generate-verification:', {
+    console.error('Verification error:', {
       name: error.name,
       message: error.message,
-      code: error.code,
-      command: error.command,
-      response: error.response,
-      stack: error.stack,
-      phase: error.phase || 'unknown'
+      code: error.code
     });
     
     res.status(500).json({ 
       error: 'Failed to send verification email',
-      details: error.message,
-      code: error.code
+      details: error.message
     });
   }
 });
@@ -335,7 +272,7 @@ app.get('/test-email', async (req, res) => {
     
     const info = await transporter.sendMail({
       from: '"NayaPlay Test" <noreply@nayaplay.co>',
-      to: "noreply@nayaplay.co", // Send to self for testing
+      to: "noreply@nayaplay.co",
       subject: "SMTP Test",
       text: "Test email"
     });
@@ -354,7 +291,6 @@ app.get('/test-email', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-
 
 // Email Verify Code Endpoint
 app.post('/api/verify-code', async (req, res) => {
@@ -580,15 +516,14 @@ app.get('/test', (req, res) => {
   });
 });
 
-
 // Marketing Email Configuration
 const marketingTransporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
   port: parseInt(process.env.SMTP_PORT),
   secure: false,
   auth: {
-    user: 'marketing@nayaplay.co', // Using the marketing email
-    pass: process.env.SMTP_MARKETING_PASSWORD // Using dedicated marketing password
+    user: 'marketing@nayaplay.co',
+    pass: process.env.SMTP_MARKETING_PASSWORD
   },
   requireTLS: true,
   debug: true
@@ -648,11 +583,6 @@ app.post('/api/send-marketing-email', async (req, res) => {
     });
   }
 });
-
-
-
-
-
 
 // Bonus Email Configuration
 const bonusTransporter = nodemailer.createTransport({
@@ -720,7 +650,6 @@ app.post('/api/send-bonus-email', async (req, res) => {
     });
   }
 });
-
 
 // Start first game
 startNewGame();

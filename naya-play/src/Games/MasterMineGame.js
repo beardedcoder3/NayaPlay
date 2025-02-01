@@ -6,30 +6,31 @@ import { auth, db } from '../firebase';
 import { doc, getDoc, addDoc, collection, increment, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { useTrackPresence } from '../Lobby/useTrackPresence';
 
-const getUserData = async () => {
-  if (!auth.currentUser) return null;
-  const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
-  return userDoc.data();
-};
-
-const shouldAllowWin = (bet, userStats) => {
-  if (
-    userStats.recentWins >= 2 ||                    
-    userStats.bigWinCount > 2 ||                    
-    bet > 50 ||                                     
-    (bet > 20 && Math.random() < 0.8)              
-  ) {
-    return false;
+// Moved game logic to be more consistent with Dice/Limbo
+const generateMinePositions = (mineCount, shouldWin = false) => {
+  const minePositions = [];
+  
+  if (!shouldWin) {
+    // Place mines in early positions if the player should lose
+    for(let i = 0; i < mineCount; i++) {
+      let pos;
+      do {
+        pos = Math.floor(Math.random() * 5);
+      } while(minePositions.includes(pos));
+      minePositions.push(pos);
+    }
+  } else {
+    // Place mines in later positions if the player should win
+    while (minePositions.length < mineCount) {
+      let pos;
+      do {
+        pos = Math.floor(Math.random() * 25);
+      } while(pos < 6 || minePositions.includes(pos));
+      minePositions.push(pos);
+    }
   }
-
-  if (
-    bet <= 5 && Math.random() < 0.7 ||             
-    userStats.lastResults.filter(r => !r).length >= 3  
-  ) {
-    return true;
-  }
-
-  return Math.random() < 0.3;
+  
+  return minePositions;
 };
 
 const GameModal = ({ type, multiplier, betAmount, onClose }) => (
@@ -99,6 +100,7 @@ const GameSquare = ({ index, isRevealed, isMine, onClick, gameState }) => {
     </button>
   );
 };
+
 const MinesGame = () => {
   const { balance, updateBalance } = useBalance();
   const { addBet } = useLiveBets();
@@ -108,12 +110,8 @@ const MinesGame = () => {
   const [mines, setMines] = useState([]);
   const [revealed, setRevealed] = useState([]);
   const [multiplier, setMultiplier] = useState(1);
-  const [userStats, setUserStats] = useState({
-    recentWins: 0,
-    totalWagered: 0,
-    lastResults: [],
-    bigWinCount: 0
-  });
+
+  useTrackPresence('mines');
 
   const calculateMultiplier = (revealedCount) => {
     if (revealedCount === 0) {
@@ -124,10 +122,8 @@ const MinesGame = () => {
     setMultiplier(multiplier);
   };
 
-  useTrackPresence('mines');
-
-  
   const validateBet = () => {
+    if (!auth.currentUser?.uid) return false;
     const betValue = parseFloat(betAmount);
     return betValue >= 0.10 && 
            betValue <= balance && 
@@ -135,203 +131,163 @@ const MinesGame = () => {
            mineCount < 25;
   };
 
-  const initializeGame = () => {
-    const willWin = shouldAllowWin(parseFloat(betAmount), userStats);
-    const minePositions = [];
-  
-    if (!willWin) {
-      // Place mines in early positions if the player should lose
-      for(let i = 0; i < mineCount; i++) {
-        let pos;
-        do {
-          pos = Math.floor(Math.random() * 5);
-        } while(minePositions.includes(pos));
-        minePositions.push(pos);
-      }
-    } else {
-      // Place mines in later positions if the player should win
-      while (minePositions.length < mineCount) {
-        let pos;
-        do {
-          pos = Math.floor(Math.random() * 25);
-        } while(pos < 6 || minePositions.includes(pos));
-        minePositions.push(pos);
-      }
-    }
-  
-    setMines(minePositions);
-    setRevealed([]);
-    setGameState('playing');
-    calculateMultiplier(0);
+  const recordBet = async (betData) => {
+    if (!auth.currentUser?.uid) throw new Error('No authenticated user');
+
+    // Add to liveBets collection
+    await addDoc(collection(db, 'liveBets'), {
+      ...betData,
+      userId: auth.currentUser.uid,
+      game: "Mines",
+      time: "Just now",
+      timestamp: serverTimestamp()
+    });
+
+    // Add to user's bets collection
+    await addDoc(collection(db, `users/${auth.currentUser.uid}/bets`), {
+      ...betData,
+      game: "Mines",
+      date: new Date().toISOString()
+    });
   };
   
+
   const handleBet = async (e) => {
     e.preventDefault();
-    if (validateBet()) {
-      const bet = parseFloat(betAmount);
-      
-      try {
-        // Deduct bet amount from balance
-        await updateBalance(-bet);
+    if (!validateBet()) return;
   
-        // Update user document for wager tracking
-        const userRef = doc(db, 'users', auth.currentUser.uid);
-        await updateDoc(userRef, {
-          totalWagered: increment(bet)
-        });
+    const bet = parseFloat(betAmount);
+    const userId = auth.currentUser?.uid;
+    
+    if (!userId) return;
   
-        // Add rakeback
-        await updateRakeback(bet, auth.currentUser.uid);
-  
-        initializeGame();
-      } catch (error) {
-        console.error("Error processing bet:", error);
-      }
-    }
-  };
-  
-
-  const updateRakeback = async (betAmount, userId) => {
     try {
-      // Calculate rakeback (1.5% of bet amount)
-      const rakebackAmount = betAmount * 0.015;
-      
-      // Update user's rakeback balance
-      const userRef = doc(db, 'users', userId);
-      await updateDoc(userRef, {
-        'rakeback.usdt': increment(rakebackAmount),
-        'rakeback.lastUpdate': serverTimestamp()
-      });
+      // Use updateBalance from context which already handles the database update
+      await updateBalance(-bet);
+  
+      // Initialize game
+      const minePositions = generateMinePositions(mineCount);
+      setMines(minePositions);
+      setRevealed([]);
+      setGameState('playing');
+      calculateMultiplier(0);
+  
     } catch (error) {
-      console.error('Error updating rakeback:', error);
+      console.error("Error processing bet:", error);
+      setGameState('idle');
     }
   };
-
+  
   const handleCashOut = async () => {
+    if (gameState !== 'playing') return;
+  
     const betValue = parseFloat(betAmount);
     const winAmount = betValue * parseFloat(multiplier);
-    const finalMultiplier = (winAmount / betValue).toFixed(2);
+    const userId = auth.currentUser?.uid;
     
+    if (!userId) return;
+  
     try {
-      // Create bet data
-      const betData = {
-        betAmount: betValue,
-        date: new Date().toISOString(),
-        game: "Mines",
-        multiplier: parseFloat(finalMultiplier),
-        payout: winAmount,
-        status: 'won'
-      };
+      // Record win
+      await Promise.all([
+        // Use updateBalance from context which handles the database update
+        updateBalance(winAmount),
+        
+        // Record in liveBets
+        addDoc(collection(db, 'liveBets'), {
+          game: "Mines",
+          userId,
+          betAmount: betValue,
+          multiplier: parseFloat(multiplier),
+          payout: winAmount,
+          time: "Just now",
+          timestamp: serverTimestamp(),
+          status: 'won'
+        }),
   
-      // Record in user's bets subcollection
-      await addDoc(collection(db, 'users', auth.currentUser.uid, 'bets'), betData);
+        // Record in user's bets
+        addDoc(collection(db, `users/${userId}/bets`), {
+          game: "Mines",
+          betAmount: betValue,
+          multiplier: parseFloat(multiplier),
+          payout: winAmount,
+          date: new Date().toISOString(),
+          status: 'won'
+        })
+      ]);
   
-      // Record in liveBets
-      await addDoc(collection(db, 'liveBets'), {
-        game: "Mines",
-        userId: auth.currentUser.uid,
-        betAmount: betValue,
-        multiplier: parseFloat(finalMultiplier),
-        payout: winAmount,
-        time: "Just now",
-        timestamp: serverTimestamp(),
-        status: 'won'
-      });
-  
-      // Update balance
-      await updateBalance(winAmount);
-  
-      // Update user stats
-      setUserStats(prev => ({
-        ...prev,
-        recentWins: prev.recentWins + 1,
-        lastResults: [true, ...prev.lastResults].slice(0, 5),
-        bigWinCount: betAmount > 50 ? prev.bigWinCount + 1 : prev.bigWinCount
-      }));
+      setGameState('won');
   
     } catch (error) {
       console.error("Error processing cashout:", error);
+      setGameState('idle');
     }
-    
-    setGameState('won');
   };
-
-// In the handleSquareClick function, update the multiplier for losses:
-const handleSquareClick = async (index) => {
-  if (gameState !== 'playing' || revealed.includes(index)) return;
-
-  if (mines.includes(index)) {
+  
+  const handleSquareClick = async (index) => {
+    if (gameState !== 'playing' || revealed.includes(index)) return;
+  
     const betValue = parseFloat(betAmount);
+    const userId = auth.currentUser?.uid;
     
-    try {
-      // Create bet data
-      const betData = {
-        betAmount: betValue,
-        date: new Date().toISOString(),
-        game: "Mines",
-        multiplier: '0',
-        payout: 0,
-        status: 'lost'
-      };
-
-      // Record in user's bets subcollection
-      await addDoc(collection(db, 'users', auth.currentUser.uid, 'bets'), betData);
-
-      // Record in liveBets
-      await addDoc(collection(db, 'liveBets'), {
-        game: "Mines",
-        userId: auth.currentUser.uid,
-        betAmount: betValue,
-        multiplier: '0',
-        payout: -betValue,
-        time: "Just now",
-        timestamp: serverTimestamp(),
-        status: 'lost'
-      });
-
-      // Update stats
-      setUserStats(prev => ({
-        ...prev,
-        recentWins: 0,
-        lastResults: [false, ...prev.lastResults].slice(0, 5)
-      }));
-
-    } catch (error) {
-      console.error("Error processing bet:", error);
+    if (!userId) return;
+  
+    if (mines.includes(index)) {
+      try {
+        await Promise.all([
+          // Record loss in liveBets
+          addDoc(collection(db, 'liveBets'), {
+            game: "Mines",
+            userId,
+            betAmount: betValue,
+            multiplier: 0,
+            payout: -betValue,
+            time: "Just now",
+            timestamp: serverTimestamp(),
+            status: 'lost'
+          }),
+  
+          // Record in user's bets
+          addDoc(collection(db, `users/${userId}/bets`), {
+            game: "Mines",
+            betAmount: betValue,
+            multiplier: 0,
+            payout: -betValue,
+            date: new Date().toISOString(),
+            status: 'lost'
+          })
+        ]);
+  
+        setGameState('lost');
+      } catch (error) {
+        console.error("Error processing loss:", error);
+        setGameState('idle');
+      }
+    } else {
+      const newRevealed = [...revealed, index];
+      setRevealed(newRevealed);
+      calculateMultiplier(newRevealed.length);
     }
-
-    setGameState('lost');
-  } else {
-    const newRevealed = [...revealed, index];
-    setRevealed(newRevealed);
-    calculateMultiplier(newRevealed.length);
-  }
-};
+  };
 
 
   return (
     <div className="h-[calc(100vh-64px)] bg-surface-800">
-      {/* Center container */}
       <div className="mx-auto max-w-7xl h-full">
-        {/* Header */}
         <div className="text-center pt-8 pb-6">
           <h1 className="text-3xl font-bold text-white">Mines</h1>
           <p className="text-gray-400">Find the gems, avoid the mines!</p>
         </div>
 
-        {/* Game Layout Container */}
         <div className="flex gap-8 px-8 h-[calc(100%-140px)]">
-          {/* Settings Panel */}
           <div className="w-[320px] bg-surface-700/50 rounded-xl p-6">
             <h2 className="text-xl font-bold text-white mb-6">Game Settings</h2>
             
-            {/* Your Balance */}
             <div className="bg-surface-600/50 rounded-lg p-4 mb-6">
               <p className="text-sm text-gray-400">Your Balance</p>
               <p className="text-2xl font-bold text-white">${balance.toFixed(2)}</p>
             </div>
 
-            {/* Mine Count Input */}
             <div className="mb-6">
               <label className="block text-sm text-gray-400 mb-2">
                 Number of Mines
@@ -347,7 +303,6 @@ const handleSquareClick = async (index) => {
               />
             </div>
 
-            {/* Bet Amount Input */}
             <div className="mb-6">
               <label className="block text-sm text-gray-400 mb-2">
                 Bet Amount (min. $0.10)
@@ -367,7 +322,6 @@ const handleSquareClick = async (index) => {
               </div>
             </div>
 
-            {/* Game Actions */}
             {gameState === 'idle' ? (
               <button
                 onClick={handleBet}
@@ -389,7 +343,6 @@ const handleSquareClick = async (index) => {
               )
             )}
 
-            {/* Current Multiplier */}
             {gameState === 'playing' && revealed.length > 0 && (
               <div className="mt-6 bg-surface-600/50 rounded-lg p-4 text-center">
                 <p className="text-sm text-gray-400">Current Multiplier</p>
@@ -398,7 +351,6 @@ const handleSquareClick = async (index) => {
             )}
           </div>
 
-          {/* Game Board */}
           <div className="flex-1 bg-surface-700/50 rounded-xl p-6">
             <div className="grid grid-cols-5 gap-3 h-full max-w-[800px] mx-auto aspect-square">
               {Array(25).fill(null).map((_, index) => (
@@ -416,7 +368,6 @@ const handleSquareClick = async (index) => {
         </div>
       </div>
 
-      {/* Modal remains unchanged */}
       {(gameState === 'won' || gameState === 'lost') && (
         <GameModal
           type={gameState}
@@ -428,5 +379,5 @@ const handleSquareClick = async (index) => {
     </div>
   );
 };
-  
-  export default MinesGame;
+
+export default MinesGame;

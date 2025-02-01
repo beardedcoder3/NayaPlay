@@ -10,8 +10,7 @@ import {
   updateDoc, 
   increment,
   serverTimestamp,
-  addDoc,
-  getDoc
+  addDoc
 } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 
@@ -27,26 +26,17 @@ export function BalanceProvider({ children }) {
 
     const unsubscribers = [];
 
-    // Set up balance listener
+    // Set up balance listener - ONLY from users collection
     const setupBalanceListener = async () => {
       try {
         const userRef = doc(db, 'users', auth.currentUser.uid);
-        const googleUserRef = doc(db, 'googleUsers', auth.currentUser.uid);
-    
+        
         const unsubscribeUser = onSnapshot(userRef, (doc) => {
           if (doc.exists()) {
             setBalance(doc.data().balance || 0);
           }
         });
         unsubscribers.push(unsubscribeUser);
-    
-        const unsubscribeGoogleUser = onSnapshot(googleUserRef, (doc) => {
-          if (doc.exists()) {
-            setBalance(doc.data().balance || 0);
-          }
-        });
-        unsubscribers.push(unsubscribeGoogleUser);
-    
       } catch (error) {
         console.error("Error setting up balance listener:", error);
       }
@@ -116,18 +106,13 @@ export function BalanceProvider({ children }) {
     if (!auth.currentUser) return;
     
     try {
-      // Determine which collection to use
-      const googleUserRef = doc(db, 'googleUsers', auth.currentUser.uid);
-      const googleUserDoc = await getDoc(googleUserRef);
-      const isGoogleUser = googleUserDoc.exists();
+      // Always use users collection
+      const userRef = doc(db, 'users', auth.currentUser.uid);
       
-      // Get reference to correct collection
-      const balanceRef = isGoogleUser ? googleUserRef : doc(db, 'users', auth.currentUser.uid);
-      
-      console.log(`Updating balance in ${isGoogleUser ? 'googleUsers' : 'users'} by:`, amount);
+      console.log('Updating balance in users by:', amount);
 
       // Update balance
-      await updateDoc(balanceRef, {
+      await updateDoc(userRef, {
         balance: increment(amount)
       });
 
