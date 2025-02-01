@@ -28,32 +28,29 @@ const FAQSection = () => {
   
   const faqs = [
     {
-      question: "Who is Stake?",
-      answer: "Leading the online gambling industry since 2017, Stake.com offers a wide variety of online casino and sports betting options, operating globally in 15 different languages. With a reputable and secure platform, Stake Casino is home to worldwide local currencies and crypto betting options for online slot games, Stake Originals and live casino games. Stake Sportsbook offers unbeatable odds on all major sporting events including a range of eSport leagues."
+      question: "Who is NayaPlay?",
+      answer: "Leading the online gambling industry since 2017, NayaPlay.co offers a wide variety of online casino and sports betting options, operating globally in 15 different languages. With a reputable and secure platform, NayaPlay Casino is home to worldwide local currencies and crypto betting options for online slot games, NayaPlay Originals and live casino games."
     },
     {
-      question: "Is Stake licensed?",
-      answer: "Stake operates under a valid gaming license and follows strict regulatory requirements to ensure fair and secure gaming operations."
+      question: "Is NayaPlay licensed?",
+      answer: "Nayaplay operates under a valid gaming license and follows strict regulatory requirements to ensure fair and secure gaming operations."
     },
     {
-      question: "Is betting on Stake safe?",
-      answer: "Yes, Stake employs industry-leading security measures and encryption to protect all user data and transactions."
+      question: "Is betting on NayaPlay safe?",
+      answer: "Yes, NayaPlay employs industry-leading security measures and encryption to protect all user data and transactions."
     },
     {
       question: "What currencies can I bet with?",
-      answer: "Stake supports multiple cryptocurrencies and local currencies for betting and transactions."
+      answer: "NayaPlay supports BTC, USDT & Pakistani Rupee at the moment."
     },
     {
       question: "What types of casino games can I play?",
-      answer: "Stake offers a wide variety of casino games including slots, table games, live dealer games, and exclusive Stake Originals."
+      answer: "NayaPlay offers a wide variety of casino games including slots, table games, live dealer games, and exclusive NayaPlay Originals."
     },
-    {
-      question: "What sports can I bet on?",
-      answer: "You can bet on all major sports including football, basketball, tennis, and esports competitions."
-    },
+  
     {
       question: "How do I watch live streams?",
-      answer: "Live streams are available for select events directly through the Stake platform for registered users."
+      answer: "Live streams are coming soon."
     }
   ];
 

@@ -183,7 +183,7 @@ const MultiplierGame = () => {
         // Add to liveBets collection
         await addDoc(collection(db, 'liveBets'), {
           ...betData,
-          user: auth.currentUser.email?.split('@')[0] || 'Anonymous',
+          userId: auth.currentUser.uid,  // Change this line
           time: "Just now",
           timestamp: serverTimestamp()
         });

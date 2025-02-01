@@ -88,52 +88,73 @@ app.use(cors({
 // Email Configuration
 // Email Configuration
 // Email Configuration
-// Email Configuration
+// Initialize transporter once
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
   port: parseInt(process.env.SMTP_PORT),
-  secure: false, // Use TLS for port 587
+  secure: false,
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASSWORD
   },
-  requireTLS: true,
-  debug: true
+  pool: true, // Enable pooling
+  maxConnections: 5, // Allow multiple connections
+  maxMessages: 100, // Maximum messages per connection
+  rateDelta: 1000, // How many milliseconds between messages
+  rateLimit: 5 // Max number of messages during rateDelta
 });
 
+// One-time verification at startup
+transporter.verify()
+  .then(() => console.log('SMTP ready'))
+  .catch(err => console.error('SMTP Error:', err.message));
 
-// Single verification check
-transporter.verify(function(error, success) {
-  if (error) {
-    console.error('SMTP Connection Error:', {
-      message: error.message,
-      code: error.code,
-      command: error.command,
-      response: error.response,
-      auth: {
-        user: process.env.SMTP_USER,
-        passLength: process.env.SMTP_PASSWORD?.length
-      }
-    });
-  } else {
-    console.log('SMTP Server ready for emails');
-  }
-});
-
-// Add this code temporarily at the top of your index.js after the transporter configuration
-(async () => {
+// Optimized verification endpoint
+app.post('/api/generate-verification', async (req, res) => {
+  const { email, userId, username } = req.body;
+  
   try {
-    const testResult = await transporter.verify();
-    console.log('SMTP Connection Test Result:', testResult);
+    // Generate code and save to Firebase concurrently
+    const verificationCode = generateVerificationCode();
+    await Promise.all([
+      firebaseAdmin.firestore()
+        .collection('verificationCodes')
+        .doc(userId)
+        .set({
+          code: verificationCode,
+          email,
+          userId,
+          createdAt: firebaseAdmin.firestore.FieldValue.serverTimestamp(),
+          expiresAt: new Date(Date.now() + 10 * 60 * 1000)
+        }),
+      
+      transporter.sendMail({
+        from: '"NayaPlay" <noreply@nayaplay.co>',
+        to: email,
+        subject: 'Verify Your NayaPlay Account',
+        html: `
+          <div style="background-color: #1a1b1e; color: #ffffff; padding: 20px; border-radius: 10px;">
+            <h1 style="color: #4f46e5;">Welcome to NayaPlay!</h1>
+            <p>Hello ${username},</p>
+            <p>Your verification code is:</p>
+            <div style="background-color: #2d2e33; padding: 20px; border-radius: 5px; text-align: center; margin: 20px 0;">
+              <span style="font-size: 32px; letter-spacing: 5px; font-family: monospace;">${verificationCode}</span>
+            </div>
+            <p>This code will expire in 10 minutes.</p>
+          </div>
+        `
+      })
+    ]);
+
+    res.json({ success: true });
   } catch (error) {
-    console.error('SMTP Connection Test Error:', {
-      message: error.message,
-      code: error.code,
-      command: error.command,
-      response: error.response
+    console.error('Verification error:', error.message);
+    res.status(500).json({ 
+      error: 'Failed to send verification email',
+      details: error.message
     });
   }
-})();
+});
 
 
 // Helper Functions

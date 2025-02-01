@@ -169,32 +169,109 @@ const MinesGame = () => {
     e.preventDefault();
     if (validateBet()) {
       const bet = parseFloat(betAmount);
-      updateBalance(-bet);
+      
+      try {
+        // Deduct bet amount from balance
+        await updateBalance(-bet);
   
-      // Update user document for wager tracking at the start of the game
-      const userRef = doc(db, 'users', auth.currentUser.uid);
+        // Update user document for wager tracking
+        const userRef = doc(db, 'users', auth.currentUser.uid);
+        await updateDoc(userRef, {
+          totalWagered: increment(bet)
+        });
+  
+        // Add rakeback
+        await updateRakeback(bet, auth.currentUser.uid);
+  
+        initializeGame();
+      } catch (error) {
+        console.error("Error processing bet:", error);
+      }
+    }
+  };
+  
+
+  const updateRakeback = async (betAmount, userId) => {
+    try {
+      // Calculate rakeback (1.5% of bet amount)
+      const rakebackAmount = betAmount * 0.015;
+      
+      // Update user's rakeback balance
+      const userRef = doc(db, 'users', userId);
       await updateDoc(userRef, {
-        totalWagered: increment(bet)
+        'rakeback.usdt': increment(rakebackAmount),
+        'rakeback.lastUpdate': serverTimestamp()
       });
-  
-      initializeGame(); // Now this function is defined
+    } catch (error) {
+      console.error('Error updating rakeback:', error);
     }
   };
 
   const handleCashOut = async () => {
     const betValue = parseFloat(betAmount);
     const winAmount = betValue * parseFloat(multiplier);
-    const finalMultiplier = (winAmount / betValue).toFixed(2); // Calculate actual multiplier
+    const finalMultiplier = (winAmount / betValue).toFixed(2);
     
     try {
-      // Create bet data with exact structure matching Firestore
+      // Create bet data
       const betData = {
         betAmount: betValue,
         date: new Date().toISOString(),
         game: "Mines",
-        multiplier: parseFloat(finalMultiplier), // Use the calculated multiplier
+        multiplier: parseFloat(finalMultiplier),
         payout: winAmount,
         status: 'won'
+      };
+  
+      // Record in user's bets subcollection
+      await addDoc(collection(db, 'users', auth.currentUser.uid, 'bets'), betData);
+  
+      // Record in liveBets
+      await addDoc(collection(db, 'liveBets'), {
+        game: "Mines",
+        userId: auth.currentUser.uid,
+        betAmount: betValue,
+        multiplier: parseFloat(finalMultiplier),
+        payout: winAmount,
+        time: "Just now",
+        timestamp: serverTimestamp(),
+        status: 'won'
+      });
+  
+      // Update balance
+      await updateBalance(winAmount);
+  
+      // Update user stats
+      setUserStats(prev => ({
+        ...prev,
+        recentWins: prev.recentWins + 1,
+        lastResults: [true, ...prev.lastResults].slice(0, 5),
+        bigWinCount: betAmount > 50 ? prev.bigWinCount + 1 : prev.bigWinCount
+      }));
+  
+    } catch (error) {
+      console.error("Error processing cashout:", error);
+    }
+    
+    setGameState('won');
+  };
+
+// In the handleSquareClick function, update the multiplier for losses:
+const handleSquareClick = async (index) => {
+  if (gameState !== 'playing' || revealed.includes(index)) return;
+
+  if (mines.includes(index)) {
+    const betValue = parseFloat(betAmount);
+    
+    try {
+      // Create bet data
+      const betData = {
+        betAmount: betValue,
+        date: new Date().toISOString(),
+        game: "Mines",
+        multiplier: '0',
+        payout: 0,
+        status: 'lost'
       };
 
       // Record in user's bets subcollection
@@ -203,82 +280,32 @@ const MinesGame = () => {
       // Record in liveBets
       await addDoc(collection(db, 'liveBets'), {
         game: "Mines",
-        userId: auth.currentUser.uid,  // Add this
+        userId: auth.currentUser.uid,
         betAmount: betValue,
-        multiplier: parseFloat(finalMultiplier),
-        payout: winAmount,
+        multiplier: '0',
+        payout: -betValue,
         time: "Just now",
         timestamp: serverTimestamp(),
-        status: 'won'
+        status: 'lost'
       });
 
-      // Update balance
-      await updateBalance(winAmount);
-
-      // Update user stats
+      // Update stats
       setUserStats(prev => ({
         ...prev,
-        recentWins: prev.recentWins + 1,
-        lastResults: [true, ...prev.lastResults].slice(0, 5),
-        bigWinCount: betAmount > 50 ? prev.bigWinCount + 1 : prev.bigWinCount
+        recentWins: 0,
+        lastResults: [false, ...prev.lastResults].slice(0, 5)
       }));
 
     } catch (error) {
-      console.error("Error processing cashout:", error);
+      console.error("Error processing bet:", error);
     }
-    
-    setGameState('won');
-};
 
-// In the handleSquareClick function, update the multiplier for losses:
- const handleSquareClick = async (index) => {
-    if (gameState !== 'playing' || revealed.includes(index)) return;
-  
-    if (mines.includes(index)) {
-      const betValue = parseFloat(betAmount);
-      
-      try {
-        // Create bet data with exact structure matching Firestore
-        const betData = {
-          betAmount: betValue,
-          date: new Date().toISOString(),
-          game: "Mines",
-          multiplier: '0', // Set to 0 for losses// Set to 0.00 for losses
-          payout: 0,
-          status: 'lost'
-        };
-
-        // Record in user's bets subcollection
-        await addDoc(collection(db, 'users', auth.currentUser.uid, 'bets'), betData);
-
-        // Record in liveBets
-        await addDoc(collection(db, 'liveBets'), {
-          game: "Mines",
-          userId: auth.currentUser.uid,  // Add this
-          betAmount: betValue,
-          multiplier: '0',
-          payout: -betValue,
-          time: "Just now",
-          timestamp: serverTimestamp(),
-          status: 'lost'
-        });
-        // Update stats
-        setUserStats(prev => ({
-          ...prev,
-          recentWins: 0,
-          lastResults: [false, ...prev.lastResults].slice(0, 5)
-        }));
-  
-      } catch (error) {
-        console.error("Error processing bet:", error);
-      }
-  
-      setGameState('lost');
-    } else {
-      const newRevealed = [...revealed, index];
-      setRevealed(newRevealed);
-      calculateMultiplier(newRevealed.length);
-    }
+    setGameState('lost');
+  } else {
+    const newRevealed = [...revealed, index];
+    setRevealed(newRevealed);
+    calculateMultiplier(newRevealed.length);
+  }
 };
 
 

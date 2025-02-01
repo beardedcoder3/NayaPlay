@@ -1,6 +1,9 @@
 import React from 'react';
 import AuthFlow from './AuthFlow';
 import { Chrome, Facebook } from 'lucide-react';
+import bonusboost from "./bonusboost.jpg"
+import rouletteimg from "./rouletteimg.jpg"
+
 
 const HeroSection = () => {
   return (
@@ -43,7 +46,7 @@ const HeroSection = () => {
               transform hover:scale-105 transition-transform duration-500
               border border-[#1e90ff]/20 aspect-[3/4]">
               <img 
-                   src="https://img.freepik.com/free-photo/spinning-roulette-wheel-blue-flame-jackpot-casino-ultimate-success-generated-by-ai_188544-55617.jpg?t=st=1735650338~exp=1735653938~hmac=a646ae88f5d910f876d7ccf6e81afd48b959cae2d878449ba0355d6514375094&w=1380" 
+                  src={rouletteimg}
                 alt="Sports experience" 
                 className="w-full h-full object-cover"
               />

@@ -1,5 +1,7 @@
 import React from 'react';
-import { Sparkles, Play, Trophy, Clock, ArrowRight } from 'lucide-react';
+import { Sparkles, Play, Trophy, Clock } from 'lucide-react';
+import cardgirl from "./cardgirl.jpg"
+
 
 const FeatureCard = ({ icon: Icon, title, description }) => (
   <div className="relative group">
@@ -22,31 +24,31 @@ const FeatureCard = ({ icon: Icon, title, description }) => (
 
 const CasinoBanner = () => {
   return (
-    <section className="relative bg-[#0A0118] py-20 overflow-hidden">
+    <section className="relative bg-[#0A0118] py-12 lg:py-20 overflow-hidden">
       {/* Decorative elements */}
       <div className="absolute inset-0">
-        <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-purple-500/10 rounded-full 
+        <div className="absolute top-0 right-0 w-96 h-96 bg-purple-500/10 rounded-full 
           blur-3xl opacity-20 -translate-y-1/2 translate-x-1/2" />
-        <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-pink-500/10 rounded-full 
+        <div className="absolute bottom-0 left-0 w-96 h-96 bg-pink-500/10 rounded-full 
           blur-3xl opacity-20 translate-y-1/2 -translate-x-1/2" />
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 relative">
-        <div className="flex flex-col lg:flex-row gap-16 items-center">
+      <div className="max-w-6xl mx-auto px-4 relative">
+        <div className="flex flex-col lg:flex-row gap-8 lg:gap-16 items-center">
           {/* Left content - Image showcase */}
-          <div className="lg:w-1/2 relative">
-            <div className="relative rounded-[2rem] overflow-hidden shadow-2xl">
+          <div className="lg:w-1/2 relative w-full">
+            <div className="relative rounded-3xl overflow-hidden shadow-2xl">
               <img
-                src="https://img.freepik.com/premium-photo/charming-blonde-lady-bright-make-up-green-stylish-dress-jewelry-folded-her-hands-showing-two-aces-posing-sideways-red-studio-background-with-backlight-gambling-poker-casino-close-up_157927-1806.jpg"
+                src={cardgirl}
                 alt="Casino Experience"
-                className="w-full aspect-[4/3] object-cover"
+                className="w-full h-full object-cover"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-80" />
               
               {/* Stats overlay */}
-              <div className="absolute bottom-0 left-0 right-0 p-8">
+              <div className="absolute bottom-0 left-0 right-0 p-6">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-6">
+                  <div className="flex items-center space-x-4 lg:space-x-6">
                     <div className="flex items-center space-x-2">
                       <Trophy className="text-purple-400 h-5 w-5" />
                       <span className="text-white text-sm font-medium">200+ Winners Daily</span>
@@ -61,7 +63,7 @@ const CasinoBanner = () => {
             </div>
 
             {/* Floating card */}
-            <div className="absolute -bottom-8 -right-8 bg-black/60 backdrop-blur-xl p-4 rounded-2xl 
+            <div className="absolute -bottom-4 -right-4 lg:-bottom-8 lg:-right-8 bg-black/60 backdrop-blur-xl p-4 rounded-2xl 
               border border-white/10 shadow-xl">
               <div className="flex items-center space-x-3">
                 <div className="p-2 rounded-lg bg-gradient-to-br from-purple-500/20 to-pink-500/20">
@@ -76,9 +78,9 @@ const CasinoBanner = () => {
           </div>
 
           {/* Right content */}
-          <div className="lg:w-1/2 space-y-10">
+          <div className="lg:w-1/2 space-y-8">
             <div>
-              <h2 className="text-5xl font-bold mb-6">
+              <h2 className="text-4xl lg:text-5xl font-bold mb-6">
                 <span className="text-white">Experience</span>
                 <br />
                 <span className="bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
@@ -112,7 +114,6 @@ const CasinoBanner = () => {
               transition-all duration-300 transform hover:scale-105
               shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40">
               <span>Start Playing Now</span>
-            
             </button>
           </div>
         </div>

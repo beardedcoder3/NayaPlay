@@ -4,6 +4,8 @@ import { useChat } from './ChatContext';
 import { auth, db } from '../firebase';
 import EmojiPicker from 'emoji-picker-react';
 import { getDoc } from 'firebase/firestore';
+import { EyeOff } from 'lucide-react';
+import IgnoreUserModal from './IgnoreUserModal';
 import { 
   collection, 
   query, 
@@ -18,6 +20,7 @@ import {
   setDoc
 } from 'firebase/firestore';
 import StatisticsModal from '../IntroPage/StatisticsModal';
+import { arrayUnion, updateDoc } from 'firebase/firestore';
 
 // Theme Colors
 const THEME = {
@@ -143,11 +146,60 @@ const GlobalChat = () => {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [isAutoScrollEnabled, setIsAutoScrollEnabled] = useState(true);
   const [userVipLevels, setUserVipLevels] = useState({});
+  const [ignoredUsers, setIgnoredUsers] = useState([]);
+const [ignoreModalUser, setIgnoreModalUser] = useState(null);
   
   const messagesEndRef = useRef(null);
   const chatContainerRef = useRef(null);
   const inputRef = useRef(null);
   const currentUser = auth.currentUser;
+
+
+  useEffect(() => {
+    if (!currentUser) return;
+    
+    const userRef = doc(db, 'users', currentUser.uid);
+    const unsubscribe = onSnapshot(userRef, (docSnapshot) => {
+      if (docSnapshot.exists()) {
+        const userData = docSnapshot.data();
+        // Ensure we always have an array, even if the field doesn't exist
+        setIgnoredUsers(userData?.ignoredUsers || []);
+      } else {
+        // If user document doesn't exist, initialize with empty array
+        setIgnoredUsers([]);
+      }
+    }, (error) => {
+      console.error('Error loading ignored users:', error);
+      setIgnoredUsers([]);
+    });
+    
+    return () => unsubscribe();
+  }, [currentUser]);
+
+  const handleIgnoreUser = async () => {
+    if (!ignoreModalUser || !currentUser) return;
+    
+    try {
+      const userRef = doc(db, 'users', currentUser.uid);
+      const userDoc = await getDoc(userRef);
+      const userData = userDoc.data();
+      
+      // Initialize or get existing ignored users array
+      const currentIgnoredUsers = userData?.ignoredUsers || [];
+      
+      // Only add if not already ignored
+      if (!currentIgnoredUsers.includes(ignoreModalUser.userId)) {
+        // Update the whole array at once
+        await updateDoc(userRef, {
+          ignoredUsers: [...currentIgnoredUsers, ignoreModalUser.userId]
+        });
+      }
+      
+      setIgnoreModalUser(null);
+    } catch (error) {
+      console.error('Error ignoring user:', error);
+    }
+  };
 
   // Track active chat users with open chat
   useEffect(() => {
@@ -436,42 +488,60 @@ const GlobalChat = () => {
   className="flex-1 overflow-y-auto overflow-x-auto scrollbar-none"
 >
   <div className="p-4">
-    {messages.map((msg) => {
-      const vipLevel = userVipLevels[msg.userId]?.toLowerCase() || 'none';
-      const VipIcon = vipLevels[vipLevel].icon;
-      
-      return (
-        <div key={msg.id} className="mb-3">
-          <div className="flex items-start">
-            <div className={`bg-gradient-to-r ${vipLevels[vipLevel].color} 
-              rounded p-1.5 flex items-center justify-center flex-shrink-0`}>
-              <VipIcon />
+  {messages
+  .filter(msg => {
+    if (!currentUser) return true;
+    if (!ignoredUsers || !Array.isArray(ignoredUsers)) return true;
+    return !ignoredUsers.includes(msg.userId);
+  })
+  .map((msg) => {
+    const vipLevel = userVipLevels[msg.userId]?.toLowerCase() || 'none';
+    const VipIcon = vipLevels[vipLevel].icon;
+    const isOwnMessage = msg.userId === currentUser?.uid;
+    
+    return (
+      <div key={msg.id} className="mb-3">
+        <div className="flex items-start">
+          <div className={`bg-gradient-to-r ${vipLevels[vipLevel].color} 
+            rounded p-1.5 flex items-center justify-center flex-shrink-0`}>
+            <VipIcon />
+          </div>
+          
+          <div className="ml-2 flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={(e) => handleUserClick(msg.userId, e)}
+                className={`text-[13px] font-medium ${vipLevels[vipLevel].textColor} 
+                  hover:text-white transition-colors`}
+              >
+                {msg.username}
+              </button>
+              <span className="text-[11px] text-[#888]">
+                {formatTime(msg.timestamp)}
+              </span>
+              {!isOwnMessage && (
+                <button
+                  onClick={() => setIgnoreModalUser(msg)}
+                  className="p-1 hover:bg-gray-800/40 rounded transition-colors"
+                >
+                  <EyeOff size={14} className="text-gray-400 hover:text-gray-300" />
+                </button>
+              )}
             </div>
             
-            <div className="ml-2 flex-1 min-w-0"> {/* Added min-w-0 for proper wrapping */}
-              <div className="flex items-baseline gap-2">
-                <button 
-                  onClick={(e) => handleUserClick(msg.userId, e)}
-                  className={`text-[13px] font-medium ${vipLevels[vipLevel].textColor} 
-                    hover:text-white transition-colors`}
-                >
-                  {msg.username}
-                </button>
-                <span className="text-[11px] text-[#888]">
-                  {formatTime(msg.timestamp)}
-                </span>
-              </div>
-              
-              <div className={`mt-1 rounded p-3 ${getMessageStyle(msg)} break-words`}>
-                <p className="text-[14px] text-white/90 whitespace-pre-wrap overflow-wrap-break">
-                  {msg.text}
-                </p>
-              </div>
+            <div className={`mt-1 rounded p-3 ${getMessageStyle(msg)} break-words`}>
+              <p className="text-[14px] text-white/90 whitespace-pre-wrap overflow-wrap-break">
+                {msg.text}
+              </p>
             </div>
           </div>
         </div>
-      );
-    })}
+      </div>
+    );
+  })}
+
+
+  
     <div ref={messagesEndRef} />
   </div>
 </div>
@@ -552,6 +622,13 @@ const GlobalChat = () => {
     onClose={() => setSelectedUser(null)}
   />
 )}
+
+<IgnoreUserModal
+  isOpen={!!ignoreModalUser}
+  onClose={() => setIgnoreModalUser(null)}
+  username={ignoreModalUser?.username}
+  onConfirm={handleIgnoreUser}
+/>
     </>
   );
 };

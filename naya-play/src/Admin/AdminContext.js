@@ -1,8 +1,7 @@
-// src/Admin/AdminContext.js
+// src/contexts/AdminContext.js
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { auth, db } from '../firebase';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import { ADMIN_CONFIG } from './AdminConfig';
+import { doc, getDoc } from 'firebase/firestore';
 
 const AdminContext = createContext();
 
@@ -13,28 +12,43 @@ export const AdminProvider = ({ children }) => {
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (user) => {
-      if (user && ADMIN_CONFIG.ADMIN_EMAILS.includes(user.email)) {
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
-        const userData = userDoc.data();
-        setIsAdmin(true);
-        setAdminRole('super');
-        await updateDoc(doc(db, 'users', user.uid), {
-          isAdmin: true,
-          adminRole: 'super'
-        });
-      } else {
+      try {
+        if (user) {
+          const userDoc = await getDoc(doc(db, 'users', user.uid));
+          const userData = userDoc.data();
+          
+          // Check for both boolean true and string "true"
+          if (userData?.isAdmin === true || userData?.isAdmin === "true") {
+            setIsAdmin(true);
+            setAdminRole(userData.adminRole || 'admin');
+          } else {
+            setIsAdmin(false);
+            setAdminRole(null);
+          }
+        } else {
+          setIsAdmin(false);
+          setAdminRole(null);
+        }
+      } catch (error) {
+        console.error('Error checking admin status:', error);
         setIsAdmin(false);
         setAdminRole(null);
+      } finally {
+        setIsLoading(false);
       }
-      setIsLoading(false);
     });
 
     return () => unsubscribe();
   }, []);
 
+  // Debug logging
+  useEffect(() => {
+    console.log('Admin status:', { isAdmin, adminRole, isLoading });
+  }, [isAdmin, adminRole, isLoading]);
+
   return (
     <AdminContext.Provider value={{ isAdmin, isLoading, adminRole }}>
-      {children}
+      {!isLoading && children}
     </AdminContext.Provider>
   );
 };

@@ -46,7 +46,9 @@ const AuthFlow = () => {
         balance: 0,
         lastActive: serverTimestamp(),
         status: 'active',
-        emailOffers: true  // Explicitly set to true
+        emailOffers: true,  // Marketing emails enabled by default
+        smsOffers: true  ,
+        ignoredUsers: [],   // Bonus offers enabled by default
       });
   
       await fetch(`${process.env.REACT_APP_API_URL}/api/generate-verification`, {
@@ -72,6 +74,9 @@ const AuthFlow = () => {
       setIsRegistering(false);
     }
   };
+
+
+
 
   const handlePhoneRegistrationComplete = async (data) => {
     try {
@@ -136,11 +141,12 @@ const AuthFlow = () => {
         status: 'active',
         notifications: [],
         notificationsEnabled: true,
-        emailOffers: true  // Explicitly set to true
+        emailOffers: true,  // Marketing emails enabled by default
+        smsOffers: true   ,
+        ignoredUsers: [],  // Bonus offers enabled by default
       }, { merge: true });
   
-  
-      // Then create googleUsers document
+      // Create googleUsers document
       await setDoc(doc(db, 'googleUsers', user.uid), {
         email: user.email,
         displayName: user.displayName,
@@ -157,6 +163,9 @@ const AuthFlow = () => {
       setIsRegistering(false);
     }
   };
+
+  
+  
   
   // Helper function to generate referral code
   const generateReferralCode = () => {

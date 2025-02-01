@@ -18,6 +18,7 @@ import { runTransaction, increment, serverTimestamp } from 'firebase/firestore';
 import { setDoc } from 'firebase/firestore';
 import { updateEmail } from 'firebase/auth';
 import { onSnapshot } from 'firebase/firestore';
+import { arrayRemove } from 'firebase/firestore';
 import { 
 
   applyActionCode,
@@ -215,7 +216,7 @@ const SettingsSidebar = ({ currentSection }) => {
     { id: 'preferences', label: 'Preferences', icon: Settings2 },
     { id: 'sessions', label: 'Sessions', icon: History },
     { id: 'ignored-users', label: 'Ignored Users', icon: UserX },
-    { id: 'verify', label: 'Verify', icon: Check },
+    
     { id: 'offers', label: 'Offers', icon: Gift }
   ];
 
@@ -603,7 +604,7 @@ const PreferencesSettings = () => {
     hideRaceStats: false,
     excludeRain: false,
     emailOffers: true,
-    smsOffers: false
+    smsOffers: true
   });
 
   // Use onSnapshot to listen for real-time updates
@@ -624,7 +625,7 @@ const PreferencesSettings = () => {
             hideRaceStats: userData.hideRaceStats ?? false,
             excludeRain: userData.excludeRain ?? false,
             emailOffers: userData.emailOffers ?? true, // Default to true if not set
-            smsOffers: userData.smsOffers ?? false
+            smsOffers: userData.smsOffers ?? true
           });
         }
         setLoading(false);
@@ -988,28 +989,98 @@ export const SessionsSettings = () => {
   );
 };
 
-
 export const IgnoredUsersSettings = () => {
   const [ignoredUsers, setIgnoredUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
+
+  useEffect(() => {
+    if (!user) return;
+
+    const fetchIgnoredUsers = async () => {
+      try {
+        // Get the user's ignored users list
+        const userRef = doc(db, 'users', user.uid);
+        const userDoc = await getDoc(userRef);
+        const ignoredIds = userDoc.data()?.ignoredUsers || [];
+
+        // Fetch user details for each ignored user
+        const usersData = await Promise.all(
+          ignoredIds.map(async (userId) => {
+            const ignoredUserDoc = await getDoc(doc(db, 'users', userId));
+            if (ignoredUserDoc.exists()) {
+              return {
+                id: userId,
+                ...ignoredUserDoc.data()
+              };
+            }
+            return null;
+          })
+        );
+
+        setIgnoredUsers(usersData.filter(Boolean));
+      } catch (error) {
+        console.error('Error fetching ignored users:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    const unsubscribe = onSnapshot(doc(db, 'users', user.uid), () => {
+      fetchIgnoredUsers();
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
+  const handleUnignore = async (userId) => {
+    if (!user) return;
+
+    try {
+      const userRef = doc(db, 'users', user.uid);
+      await updateDoc(userRef, {
+        ignoredUsers: arrayRemove(userId)
+      });
+    } catch (error) {
+      console.error('Error unignoring user:', error);
+    }
+  };
 
   return (
     <Card title="Ignored Users" icon={UserX}>
-      {ignoredUsers.length > 0 ? (
+      {loading ? (
+        <div className="flex items-center justify-center py-8">
+          <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      ) : ignoredUsers.length > 0 ? (
         <div className="space-y-4">
           {ignoredUsers.map(user => (
             <div 
               key={user.id} 
-              className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10"
+              className="flex items-center justify-between p-4 bg-gray-800/40 
+                rounded-xl border border-gray-700/50"
             >
-              <span className="font-medium text-white">{user.username}</span>
-              <Button variant="danger" size="sm">Unignore</Button>
+              <div className="flex items-center space-x-3">
+                <span className="font-medium text-white">{user.username}</span>
+                <span className="text-sm text-gray-400">Ignored</span>
+              </div>
+              <Button
+                variant="danger"
+                onClick={() => handleUnignore(user.id)}
+                className="px-4 py-2"
+              >
+                Unignore
+              </Button>
             </div>
           ))}
         </div>
       ) : (
         <div className="text-center py-12">
-          <UserX size={48} className="text-white/20 mx-auto mb-4" />
-          <p className="text-white/60">No ignored users to show</p>
+          <UserX size={48} className="text-gray-400 mx-auto mb-4" />
+          <p className="text-gray-400">No ignored users</p>
+          <p className="text-sm text-gray-500 mt-2">
+            Users you ignore in chat will appear here
+          </p>
         </div>
       )}
     </Card>
@@ -1024,6 +1095,7 @@ export const OffersSettings = () => {
   const { user } = useAuth();
   const [bonusError, setBonusError] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
+  const [showWelcomeInput, setShowWelcomeInput] = useState(true);
   const [modalConfig, setModalConfig] = useState({
     show: false,
     title: '',
@@ -1093,6 +1165,8 @@ export const OffersSettings = () => {
         });
 
         setWelcomeCode('');
+        // Immediately hide the welcome bonus section
+        setShowWelcomeInput(false);
         setModalConfig({
           show: true,
           title: 'Success!',
@@ -1135,37 +1209,53 @@ export const OffersSettings = () => {
         }
      
         if (validCode.minWager) {
-          const userWager = userDoc.data().stats?.wagered || 0;
+          const userWager = userDoc.data().totalWagered || 0;
           if (userWager < validCode.minWager) {
             setBonusError(`Minimum wager requirement of ${validCode.minWager} not met`);
+            setModalConfig({
+              show: true,
+              title: 'Error',
+              message: `You need to wager at least ${validCode.minWager} credits before redeeming this bonus code. Current wager: ${userWager}`,
+              type: 'error'
+            });
             return;
           }
         }
      
-        await runTransaction(db, async (transaction) => {
-          const codeRef = codeDoc.docs[0].ref;
-          transaction.update(codeRef, {
-            currentRedemptions: increment(1)
-          });
-     
-          const currentBalance = userDoc.data().balance || 0;
-          transaction.update(userRef, {
-            balance: currentBalance + validCode.perUserAmount,
-            lastBonus: serverTimestamp(),
-            [`redeemedCodes.${code}`]: {
+        try {
+          await runTransaction(db, async (transaction) => {
+            // First update user document - this is specifically allowed in security rules
+            const currentBalance = userDoc.data().balance || 0;
+            transaction.update(userRef, {
+              balance: currentBalance + validCode.perUserAmount,
+              lastBonus: serverTimestamp(),
+              [`redeemedCodes.${code}`]: {
+                amount: validCode.perUserAmount,
+                redeemedAt: serverTimestamp()
+              }
+            });
+       
+            // Create bonus redemption record - this is allowed for authenticated users
+            const redemptionRef = doc(collection(db, 'bonusRedemptions'));
+            transaction.set(redemptionRef, {
+              userId: user.uid,
+              code: code,
               amount: validCode.perUserAmount,
-              redeemedAt: serverTimestamp()
-            }
+              timestamp: serverTimestamp(),
+              type: 'bonus'
+            });
           });
-     
-          const redemptionRef = doc(collection(db, 'bonusRedemptions'));
-          transaction.set(redemptionRef, {
-            userId: user.uid,
-            code: code,
-            amount: validCode.perUserAmount,
-            timestamp: serverTimestamp()
+        } catch (error) {
+          console.error('Transaction error:', error);
+          setBonusError('Failed to process bonus code. Please try again.');
+          setModalConfig({
+            show: true,
+            title: 'Error',
+            message: 'Failed to process bonus code. Please try again.',
+            type: 'error'
           });
-        });
+          return;
+        }
      
         setBonusCode('');
         setModalConfig({
@@ -1177,19 +1267,29 @@ export const OffersSettings = () => {
       }
     } catch (error) {
       console.error('Error redeeming code:', error);
-      setBonusError('Failed to redeem code. Please try again.');
-      setModalConfig({
-        show: true,
-        title: 'Error',
-        message: 'Failed to redeem code. Please try again.',
-        type: 'error'
-      });
+      
+      // Handle Firebase permission errors specifically
+      if (error.code === 'permission-denied' || error.message.includes('Missing or insufficient permissions')) {
+        setBonusError('Permission denied. Please try again later.');
+        setModalConfig({
+          show: true,
+          title: 'Error',
+          message: 'You do not have permission to redeem this code. Please contact support if this persists.',
+          type: 'error'
+        });
+      } else {
+        setBonusError('Failed to redeem code. Please try again.');
+        setModalConfig({
+          show: true,
+          title: 'Error',
+          message: 'Failed to redeem code. Please try again.',
+          type: 'error'
+        });
+      }
     } finally {
       setLoading(false);
     }
   };
-
-  const [showWelcomeInput, setShowWelcomeInput] = useState(true);
 
   useEffect(() => {
     const checkWelcomeBonusStatus = async () => {

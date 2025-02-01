@@ -27,6 +27,8 @@ import {
   getDoc
 } from 'firebase/firestore';
 import { db } from '../../firebase';
+import { useAdmin } from '../AdminContext';
+import { auth } from '../../firebase';
 
 const InputField = ({ label, type, value, onChange, placeholder, icon: Icon, className = "" }) => (
   <div className={className}>
@@ -50,6 +52,7 @@ const InputField = ({ label, type, value, onChange, placeholder, icon: Icon, cla
 );
 
 const AdminBonusManager = () => {
+  const { isAdmin } = useAdmin();
   const [bonusData, setBonusData] = useState({
     code: '',
     totalAmount: '',
@@ -101,25 +104,37 @@ const AdminBonusManager = () => {
   
     return () => unsubscribers.forEach(unsub => unsub());
   }, []);
-
   const updateWelcomeBonus = async () => {
     try {
       setLoading(true);
-      await setDoc(doc(db, 'welcomeBonus', 'current'), {
-        code: welcomeBonus.code,
+      
+      const docRef = doc(db, 'welcomeBonus', 'current');
+      await setDoc(docRef, {
+        code: welcomeBonus.code || '',
         perUserAmount: Number(welcomeBonus.amount),
         isActive: welcomeBonus.isActive,
-        updatedAt: Timestamp.now()
-      });
+        updatedAt: Timestamp.now(),
+        createdAt: Timestamp.now(), // Add this in case document doesn't exist
+        maxRedemptions: 9999999, // Add reasonable default
+        currentRedemptions: 0,
+        type: 'welcome' // Add document type identifier
+      }, { merge: true }); // Use merge to preserve existing fields
+  
       alert('Welcome bonus updated successfully!');
     } catch (error) {
       console.error('Error updating welcome bonus:', error);
-      alert('Error updating welcome bonus');
+      // Show more specific error message
+      if (error.code === 'permission-denied') {
+        alert('Permission denied. Only admins can update welcome bonus.');
+      } else {
+        alert('Error updating welcome bonus: ' + error.message);
+      }
     } finally {
       setLoading(false);
     }
   };
 
+  
   const generateRandomCode = () => {
     const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     let result = '';
