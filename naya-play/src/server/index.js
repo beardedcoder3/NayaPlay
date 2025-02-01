@@ -95,16 +95,93 @@ const transporter = nodemailer.createTransport({
 });
 
 // Cache verification template
+// Replace the existing getVerificationEmailTemplate function with this:
 const getVerificationEmailTemplate = (username, code) => `
-  <div style="background-color: #1a1b1e; color: #ffffff; padding: 20px; border-radius: 10px;">
-    <h1 style="color: #4f46e5;">Welcome to NayaPlay!</h1>
-    <p>Hello ${username},</p>
-    <p>Your verification code is:</p>
-    <div style="background-color: #2d2e33; padding: 20px; border-radius: 5px; text-align: center; margin: 20px 0;">
-      <span style="font-size: 32px; letter-spacing: 5px; font-family: monospace;">${code}</span>
-    </div>
-    <p>This code will expire in 10 minutes.</p>
-  </div>
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to NayaPlay - Verify Your Account</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #1a1b1e; font-family: Arial, sans-serif;">
+    <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center" width="100%" style="max-width: 37.5em; margin: 0 auto; padding: 20px 0; background-color: #1a1b1e;">
+        <tr>
+            <td align="center" style="padding: 20px;">
+                <!-- Main Container -->
+                <table cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width: 600px; background-color: #1f2937; border-radius: 16px; overflow: hidden;">
+                    <!-- Header -->
+                    <tr>
+                        <td align="center" style="padding: 40px 20px; background-color: #1f2937;">
+                            <img src="https://www.nayaplay.co/static/media/Logo2.9d9eee96e726f06834fe.png" alt="NayaPlay" width="140" style="display: block; margin-bottom: 20px;">
+                            <h1 style="margin: 0; color: #4f46e5; font-size: 28px; font-weight: bold;">Welcome to NayaPlay!</h1>
+                        </td>
+                    </tr>
+
+                    <!-- Content -->
+                    <tr>
+                        <td style="padding: 30px 20px; background-color: #1f2937;">
+                            <p style="color: #e2e8f0; font-size: 16px; line-height: 24px; margin: 0 0 20px;">
+                                Hello ${username},<br><br>
+                                Your verification code is:
+                            </p>
+
+                            <!-- Code Display -->
+                            <table cellspacing="0" cellpadding="0" border="0" width="100%" style="margin: 20px 0;">
+                                <tr>
+                                    <td align="center">
+                                        <div style="background-color: #2d2e33; border: 2px solid #4f46e5; border-radius: 12px; padding: 20px; display: inline-block;">
+                                            <span style="color: #ffffff; font-size: 32px; font-weight: bold; letter-spacing: 8px; font-family: monospace;">${code}</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- Notice -->
+                            <table cellspacing="0" cellpadding="0" border="0" width="100%" style="margin: 20px 0;">
+                                <tr>
+                                    <td style="background-color: #2d2e33; padding: 20px; border-radius: 12px;">
+                                        <p style="color: #9ca3af; font-size: 14px; line-height: 20px; margin: 0; text-align: center;">
+                                            ⏰ This code will expire in <span style="color: #e2e8f0; font-weight: bold;">10 minutes</span><br>
+                                            🔒 For security reasons, never share this code with anyone
+                                        </p>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td style="background-color: #2d2e33; padding: 30px 20px; text-align: center; border-top: 1px solid rgba(255, 255, 255, 0.1);">
+                            <p style="color: #9ca3af; font-size: 14px; margin: 0 0 10px;">
+                                Need help? Contact us at:
+                            </p>
+                            <p style="margin: 0;">
+                                <a href="mailto:support@nayaplay.co" style="color: #4f46e5; text-decoration: none; font-weight: 500;">support@nayaplay.co</a>
+                                <span style="color: #4b5563; margin: 0 10px;">•</span>
+                                <a href="tel:+18143092786" style="color: #4f46e5; text-decoration: none; font-weight: 500;">+1 814-309-2786</a>
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+
+                <!-- Footer Text -->
+                <table cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width: 600px; margin-top: 20px;">
+                    <tr>
+                        <td align="center" style="padding: 0 20px;">
+                            <p style="color: #6b7280; font-size: 12px; line-height: 16px; margin: 0;">
+                                © 2024 NayaPlay. All rights reserved.<br>
+                                If you didn't create a NayaPlay account, you can safely ignore this email.
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
 `;
 
 // One-time verification at startup
