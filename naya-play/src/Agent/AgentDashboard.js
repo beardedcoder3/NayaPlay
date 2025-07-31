@@ -20,9 +20,44 @@ import {
   ArrowUpRight, 
   History,
   Activity,
-  LogOut
+  LogOut,
+  Search,
+  Calendar,
+  User,
+  RefreshCcw,
+  AlertCircle,
+  CheckCircle,
+  Clock
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+
+const StatusBadge = ({ status }) => {
+  const statusConfig = {
+    completed: { bg: 'bg-emerald-500/10', text: 'text-emerald-400', icon: CheckCircle },
+    pending: { bg: 'bg-amber-500/10', text: 'text-amber-400', icon: Clock },
+    failed: { bg: 'bg-red-500/10', text: 'text-red-400', icon: AlertCircle }
+  };
+
+  const config = statusConfig[status] || statusConfig.pending;
+  const Icon = config.icon;
+
+  return (
+    <span className={`px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1.5 ${config.bg} ${config.text}`}>
+      <Icon className="w-3 h-3" />
+      {status}
+    </span>
+  );
+};
+
+const LoadingSpinner = () => (
+  <div className="flex-1 flex items-center justify-center bg-gray-900 min-h-screen">
+    <div className="flex flex-col items-center gap-3">
+      <RefreshCcw className="w-8 h-8 text-emerald-500 animate-spin" />
+      <p className="text-gray-400 animate-pulse">Loading dashboard...</p>
+    </div>
+  </div>
+);
 
 const AgentDashboard = () => {
   const navigate = useNavigate();
@@ -38,6 +73,9 @@ const AgentDashboard = () => {
   const [recipientUsername, setRecipientUsername] = useState('');
   const [transferMessage, setTransferMessage] = useState('');
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [viewMode, setViewMode] = useState('all');
+  const [agentData, setAgentData] = useState(null);
 
   useEffect(() => {
     if (!auth.currentUser) {
@@ -49,6 +87,7 @@ const AgentDashboard = () => {
     const agentRef = doc(db, 'users', auth.currentUser.uid);
     const unsubscribeAgent = onSnapshot(agentRef, (doc) => {
       if (doc.exists()) {
+        setAgentData(doc.data());
         setMetrics(prev => ({
           ...prev,
           totalBalance: doc.data().balance || 0
@@ -74,9 +113,20 @@ const AgentDashboard = () => {
 
       snapshot.forEach((doc) => {
         const data = { id: doc.id, ...doc.data() };
+        
+        // Filter based on search term
+        if (searchTerm && !data.username?.toLowerCase().includes(searchTerm.toLowerCase())) {
+          return;
+        }
+        
+        // Filter based on view mode
+        if (viewMode !== 'all' && data.status !== viewMode) {
+          return;
+        }
+
         transactionData.push(data);
         
-        if (data.type === 'user_transfer' && data.status === 'completed') {
+        if (data.type === 'agent_transfer' && data.status === 'completed') {
           totalTransferred += data.amount;
           if (data.timestamp?.toDate() >= today) {
             todayTransactions++;
@@ -98,7 +148,7 @@ const AgentDashboard = () => {
       unsubscribeAgent();
       unsubscribeTransactions();
     };
-  }, [navigate]);
+  }, [navigate, searchTerm, viewMode]);
 
   const handleTransfer = async () => {
     if (!recipientUsername || !transferAmount) {
@@ -168,7 +218,7 @@ const AgentDashboard = () => {
         userId: recipientDoc.id,
         username: recipientUsername,
         amount: transferAmountNum,
-        type: 'agent_transfer',  // Changed from 'user_transfer'
+        type: 'agent_transfer',
         timestamp: serverTimestamp(),
         status: 'completed',
         previousAgentBalance: currentAgentBalance,
@@ -186,13 +236,12 @@ const AgentDashboard = () => {
           transactionId: transactionRef.id,
           type: 'payment_received',
           seen: false,
-          data: {
-            ...transactionData,
-            timestamp: new Date()
-          },
-          createdAt: new Date()
+          amount: transferAmountNum,  // Move amount to top level
+          agentUsername: agentSnapshot.data().username,
+          timestamp: serverTimestamp(),  // Use serverTimestamp instead of new Date()
+          message: `Payment received from agent ${agentSnapshot.data().username}`
         };
-
+      
         await addDoc(notificationsRef, notificationData);
       } catch (notificationError) {
         console.error('Error creating notification:', notificationError);
@@ -207,12 +256,23 @@ const AgentDashboard = () => {
     }
   };
 
+  const formatTime = (timestamp) => {
+    if (!timestamp) return '';
+    
+    const date = timestamp.seconds 
+      ? new Date(timestamp.seconds * 1000)
+      : timestamp instanceof Date 
+        ? timestamp 
+        : new Date();
+
+    return date.toLocaleTimeString([], { 
+      hour: '2-digit', 
+      minute: '2-digit'
+    });
+  };
+
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-indigo-500" />
-      </div>
-    );
+    return <LoadingSpinner />;
   }
 
   return (
@@ -221,20 +281,35 @@ const AgentDashboard = () => {
       <div className="bg-gray-800 border-b border-gray-700">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
-            <div className="flex items-center">
-              <h1 className="text-white text-xl font-semibold">Agent Dashboard</h1>
+            <div className="flex items-center space-x-6">
+              
+              <div className="relative group">
+                <input 
+                  type="text"
+                  placeholder="Search transactions..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="bg-gray-700 text-white rounded-lg pl-10 pr-4 py-2 w-72 focus:ring-2 focus:ring-emerald-500 focus:outline-none transition-all duration-200 border border-gray-600 hover:border-gray-500"
+                />
+                <Search className="absolute left-3 top-2.5 h-5 w-5 text-gray-400 group-hover:text-gray-300 transition-colors" />
+              </div>
             </div>
-            <button
-              onClick={() => {
-                auth.signOut();
-                navigate('/agent/login');
-              }}
-              className="flex items-center px-3 py-2 rounded-md text-sm font-medium text-red-400 
-                hover:text-red-300"
-            >
-              <LogOut className="h-4 w-4 mr-2" />
-              Logout
-            </button>
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-2 px-4 py-2 bg-gray-700 rounded-lg">
+                <User className="h-5 w-5 text-emerald-400" />
+                <span className="text-white">{agentData?.username}</span>
+              </div>
+              <button
+                onClick={() => {
+                  auth.signOut();
+                  navigate('/agent/login');
+                }}
+                className="flex items-center px-4 py-2 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500/20 transition-colors duration-200"
+              >
+                <LogOut className="h-4 w-4 mr-2" />
+                Logout
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -243,114 +318,209 @@ const AgentDashboard = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Metrics Grid */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          <div className="bg-gray-800 rounded-lg p-6">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-gray-800 rounded-lg p-6"
+          >
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-gray-400">Balance</h3>
-              <DollarSign className="h-5 w-5 text-green-400" />
+              <DollarSign className="h-5 w-5 text-emerald-400" />
             </div>
             <p className="text-2xl font-semibold text-white">
               ${metrics.totalBalance.toFixed(2)}
             </p>
-          </div>
+          </motion.div>
 
-          <div className="bg-gray-800 rounded-lg p-6">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="bg-gray-800 rounded-lg p-6"
+          >
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-gray-400">Total Transferred</h3>
-              <ArrowUpRight className="h-5 w-5 text-blue-400" />
+              <ArrowUpRight className="h-5 w-5 text-emerald-400" />
             </div>
             <p className="text-2xl font-semibold text-white">
               ${metrics.totalTransferred.toFixed(2)}
             </p>
-          </div>
+          </motion.div>
 
-          <div className="bg-gray-800 rounded-lg p-6">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className="bg-gray-800 rounded-lg p-6"
+          >
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-gray-400">Total Transactions</h3>
-              <Activity className="h-5 w-5 text-indigo-400" />
+              <Activity className="h-5 w-5 text-emerald-400" />
             </div>
             <p className="text-2xl font-semibold text-white">
               {metrics.totalTransactions}
             </p>
-          </div>
+          </motion.div>
 
-          <div className="bg-gray-800 rounded-lg p-6">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className="bg-gray-800 rounded-lg p-6"
+          >
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-gray-400">Today's Transactions</h3>
-              <History className="h-5 w-5 text-purple-400" />
+              <History className="h-5 w-5 text-emerald-400" />
             </div>
             <p className="text-2xl font-semibold text-white">
               {metrics.todayTransactions}
             </p>
-          </div>
+          </motion.div>
         </div>
 
         {/* Transfer Section and Transaction History */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           {/* Transfer Form */}
-          <div className="bg-gray-800 rounded-lg p-6">
-            <h3 className="text-xl font-semibold text-white mb-4">Transfer to User</h3>
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="bg-gray-800 rounded-lg p-6"
+          >
+            <h3 className="text-xl font-semibold text-white mb-6">Transfer to User</h3>
             <div className="space-y-4">
-              <input
-                type="text"
-                placeholder="Username"
-                value={recipientUsername}
-                onChange={(e) => setRecipientUsername(e.target.value)}
-                className="w-full bg-gray-700 text-white rounded-lg px-4 py-2"
-              />
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-2">
+                  Recipient Username
+                </label>
+                <input
+                  type="text"
+                  placeholder="Enter username"
+                  value={recipientUsername}
+                  onChange={(e) => setRecipientUsername(e.target.value)}
+                  className="w-full bg-gray-700/50 text-white rounded-lg px-4 py-3 focus:ring-2 focus:ring-emerald-500 focus:outline-none border border-gray-600 hover:border-gray-500"
+                />
+              </div>
 
-              <input
-                type="number"
-                placeholder="Amount"
-                value={transferAmount}
-                onChange={(e) => setTransferAmount(e.target.value)}
-                className="w-full bg-gray-700 text-white rounded-lg px-4 py-2"
-              />
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-2">
+                  Amount
+                </label>
+                <input
+                  type="number"
+                  placeholder="Enter amount"
+                  value={transferAmount}
+                  onChange={(e) => setTransferAmount(e.target.value)}
+                  className="w-full bg-gray-700/50 text-white rounded-lg px-4 py-3 focus:ring-2 focus:ring-emerald-500 focus:outline-none border border-gray-600 hover:border-gray-500"
+                />
+              </div>
 
               <button
                 onClick={handleTransfer}
-                className="w-full bg-indigo-500 text-white py-2 rounded-lg hover:bg-indigo-600
-                  transition-colors duration-200"
+                className="w-full bg-emerald-500 text-white py-3 rounded-lg hover:bg-emerald-600
+                  transition-colors duration-200 font-medium"
               >
-                Transfer
+                Transfer Funds
               </button>
 
               {transferMessage && (
-                <p className={`text-sm ${
-                  transferMessage.includes('successful') ? 'text-green-400' : 'text-red-400'
-                }`}>
-                  {transferMessage}
-                </p>
+                <div className={`p-4 rounded-lg ${
+                  transferMessage.includes('successful') 
+                    ? 'bg-emerald-500/10 text-emerald-400' 
+                    : 'bg-red-500/10 text-red-400'
+                } flex items-center gap-2`}>
+                  {transferMessage.includes('successful') 
+                    ? <CheckCircle className="h-5 w-5" />
+                    : <AlertCircle className="h-5 w-5" />
+                  }
+                  <p>{transferMessage}</p>
+                </div>
               )}
             </div>
-          </div>
+          </motion.div>
 
           {/* Recent Transactions */}
-          <div className="bg-gray-800 rounded-lg p-6">
-            <h3 className="text-xl font-semibold text-white mb-4">Recent Transactions</h3>
-            <div className="space-y-3 max-h-[400px] overflow-y-auto">
-              {transactions.length > 0 ? transactions.map((transaction) => (
-                <div
-                  key={transaction.id}
-                  className="flex items-center justify-between p-4 bg-gray-700/50 rounded-lg"
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="bg-gray-800 rounded-lg p-6"
+          >
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-semibold text-white">Recent Transactions</h3>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setViewMode('all')}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors duration-200 ${
+                    viewMode === 'all'
+                      ? 'bg-emerald-500 text-white'
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  }`}
                 >
-                  <div>
-                    <p className="text-sm font-medium text-white">{transaction.username}</p>
-                    <p className="text-xs text-gray-400">
-                      {transaction.timestamp?.toDate()?.toLocaleString() || 'N/A'}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-medium text-green-400">
-                      ${(transaction.amount || 0).toFixed(2)}
-                    </p>
-                    <p className="text-xs text-gray-400">{transaction.type}</p>
-                  </div>
-                </div>
-              )) : (
-                <div className="text-center text-gray-400">No transactions yet</div>
-              )}
+                  All
+                </button>
+                <button
+                  onClick={() => setViewMode('completed')}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors duration-200 ${
+                    viewMode === 'completed'
+                      ? 'bg-emerald-500 text-white'
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  }`}
+                >
+                  Completed
+                </button>
+                <button
+                  onClick={() => setViewMode('pending')}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors duration-200 ${
+                    viewMode === 'pending'
+                      ? 'bg-emerald-500 text-white'
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  }`}
+                >
+                  Pending
+                </button>
+              </div>
             </div>
-          </div>
+
+            <div className="space-y-3 max-h-[400px] overflow-y-auto">
+              <AnimatePresence>
+                {transactions.length > 0 ? transactions.map((transaction) => (
+                  <motion.div
+                    key={transaction.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    className="flex items-center justify-between p-4 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-colors duration-200"
+                  >
+                    <div className="flex items-center space-x-4">
+                      <div className="h-10 w-10 rounded-full bg-emerald-500/10 flex items-center justify-center">
+                        <User className="h-5 w-5 text-emerald-400" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-white">{transaction.username}</p>
+                        <p className="text-xs text-gray-400">
+                          {transaction.timestamp?.toDate()?.toLocaleString() || 'N/A'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-medium text-emerald-400">
+                        ${transaction.amount?.toFixed(2)}
+                      </p>
+                      <StatusBadge status={transaction.status} />
+                    </div>
+                  </motion.div>
+                )) : (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="text-center py-8"
+                  >
+                    <Activity className="h-12 w-12 text-gray-500 mx-auto mb-4" />
+                    <p className="text-gray-400">No transactions found</p>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </motion.div>
         </div>
       </div>
     </div>

@@ -2,66 +2,66 @@ import React, { useState } from 'react';
 import { auth, db } from '../firebase';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
-import { Shield, AlertCircle } from 'lucide-react';
-import { useNavigate, Link } from 'react-router-dom';
-import { getDocs, query, collection, where } from 'firebase/firestore';
+import { UserCircle, Calendar, Phone, Mail, Eye, EyeOff, AlertCircle } from 'lucide-react';
 
 const AgentRegistration = () => {
-  const navigate = useNavigate();
   const [formData, setFormData] = useState({
-    username: '',
+    fullName: '',
     email: '',
+    phone: '',
+    dateOfBirth: '',
     password: '',
     confirmPassword: ''
   });
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
-
+  
+    if (formData.password !== formData.confirmPassword) {
+      setError('Passwords do not match');
+      setLoading(false);
+      return;
+    }
+  
     try {
-      console.log('Starting registration process...'); // Debug log
-
-      // Create auth account first
       const userCredential = await createUserWithEmailAndPassword(
         auth,
         formData.email,
         formData.password
       );
-
-      console.log('Auth account created:', userCredential.user.uid); // Debug log
-
-      // Create the user document with all required fields
+  
       const userData = {
-        username: formData.username,
         email: formData.email,
-        role: 'agent', // Make sure this is exactly 'agent'
-        verified: false,
+        username: formData.email.split('@')[0], // Generate a username from email
+        displayUsername: formData.fullName,
+        dateOfBirth: formData.dateOfBirth,
+        createdAt: new Date(),
+        emailVerified: false,
         balance: 0,
-        online: true,
-        createdAt: new Date().toISOString(),
-        lastLogin: new Date().toISOString()
+        lastActive: new Date(),
+        status: 'pending',
+        notifications: [],
+        notificationsEnabled: true,
+        role: 'agent',
+        verified: false,
+        phone: formData.phone
       };
-
-      console.log('Preparing to save user data:', userData); // Debug log
-
+  
       await setDoc(doc(db, 'users', userCredential.user.uid), userData);
-
-      console.log('User document created successfully'); // Debug log
-
-      setSuccess(true);
-      await auth.signOut();
+      
+      // Redirect or show success message
     } catch (error) {
-      console.error('Registration error:', error);
       setError(error.message);
     } finally {
       setLoading(false);
     }
-};
+  };
+
   const handleChange = (e) => {
     setFormData({
       ...formData,
@@ -69,124 +69,164 @@ const AgentRegistration = () => {
     });
   };
 
-  if (success) {
-    return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center px-4">
-        <div className="max-w-md w-full bg-gray-800 rounded-lg p-8 text-center">
-          <Shield className="w-16 h-16 text-green-400 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-white mb-2">Registration Successful</h2>
-          <p className="text-gray-400 mb-6">
-            Your agent account is pending verification. Please wait for admin approval.
-          </p>
-          <Link
-            to="/agent/login"
-            className="text-indigo-400 hover:text-indigo-300 text-sm"
-          >
-            Back to Login
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-gray-900 flex items-center justify-center px-4">
-      <div className="max-w-md w-full bg-gray-800 rounded-lg p-8">
+      <div className="max-w-lg w-full">
         <div className="text-center mb-8">
-          <Shield className="w-16 h-16 text-indigo-400 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-white">Agent Registration</h2>
-          <p className="text-gray-400">Create your agent account</p>
+          <div className="bg-emerald-500/10 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4">
+            <UserCircle className="w-12 h-12 text-emerald-500" />
+          </div>
+          <h2 className="text-3xl font-bold text-white mb-2">Top-up Agent Registration</h2>
+          <p className="text-gray-400">Join our Top-Up Agent Panel</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-400 mb-2">
-              Username
-            </label>
-            <input
-              type="text"
-              name="username"
-              required
-              value={formData.username}
-              onChange={handleChange}
-              className="w-full bg-gray-700 text-white rounded-lg px-4 py-2"
-              placeholder="Enter your username"
-            />
-          </div>
+        <div className="bg-gray-800/50 backdrop-blur rounded-xl p-8">
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-2">
+                  Email address
+                </label>
+                <div className="relative">
+                  <input
+                    type="email"
+                    name="email"
+                    required
+                    value={formData.email}
+                    onChange={handleChange}
+                    className="w-full bg-gray-700/50 text-white rounded-lg pl-10 pr-4 py-3 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                    placeholder="Enter your email"
+                  />
+                  <Mail className="w-5 h-5 text-gray-400 absolute left-3 top-3.5" />
+                </div>
+              </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-400 mb-2">
-              Email
-            </label>
-            <input
-              type="email"
-              name="email"
-              required
-              value={formData.email}
-              onChange={handleChange}
-              className="w-full bg-gray-700 text-white rounded-lg px-4 py-2"
-              placeholder="Enter your email"
-            />
-          </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-2">
+                  Full Name
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    name="fullName"
+                    required
+                    value={formData.fullName}
+                    onChange={handleChange}
+                    className="w-full bg-gray-700/50 text-white rounded-lg pl-10 pr-4 py-3 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                    placeholder="Enter your full name"
+                  />
+                  <UserCircle className="w-5 h-5 text-gray-400 absolute left-3 top-3.5" />
+                </div>
+              </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-400 mb-2">
-              Password
-            </label>
-            <input
-              type="password"
-              name="password"
-              required
-              value={formData.password}
-              onChange={handleChange}
-              className="w-full bg-gray-700 text-white rounded-lg px-4 py-2"
-              placeholder="Enter your password"
-              minLength={6}
-            />
-          </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-2">
+                  Phone Number
+                </label>
+                <div className="relative">
+                  <input
+                    type="tel"
+                    name="phone"
+                    required
+                    value={formData.phone}
+                    onChange={handleChange}
+                    className="w-full bg-gray-700/50 text-white rounded-lg pl-10 pr-4 py-3 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                    placeholder="Enter phone number"
+                  />
+                  <Phone className="w-5 h-5 text-gray-400 absolute left-3 top-3.5" />
+                </div>
+              </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-400 mb-2">
-              Confirm Password
-            </label>
-            <input
-              type="password"
-              name="confirmPassword"
-              required
-              value={formData.confirmPassword}
-              onChange={handleChange}
-              className="w-full bg-gray-700 text-white rounded-lg px-4 py-2"
-              placeholder="Confirm your password"
-              minLength={6}
-            />
-          </div>
-
-          {error && (
-            <div className="flex items-center space-x-2 text-red-400 bg-red-400/10 p-3 rounded-lg">
-              <AlertCircle className="h-5 w-5" />
-              <p className="text-sm">{error}</p>
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-2">
+                  Date of Birth
+                </label>
+                <div className="relative">
+                  <input
+                    type="date"
+                    name="dateOfBirth"
+                    required
+                    value={formData.dateOfBirth}
+                    onChange={handleChange}
+                    className="w-full bg-gray-700/50 text-white rounded-lg pl-10 pr-4 py-3 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  />
+                  <Calendar className="w-5 h-5 text-gray-400 absolute left-3 top-3.5" />
+                </div>
+              </div>
             </div>
-          )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-indigo-500 text-white py-2 px-4 rounded-lg
-              hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading ? 'Creating Account...' : 'Register'}
-          </button>
+            <div>
+              <label className="block text-sm font-medium text-gray-400 mb-2">
+                Password
+              </label>
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  name="password"
+                  required
+                  value={formData.password}
+                  onChange={handleChange}
+                  className="w-full bg-gray-700/50 text-white rounded-lg pl-4 pr-10 py-3 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  placeholder="Create a strong password"
+                  minLength={6}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-3.5 text-gray-400 hover:text-gray-300"
+                >
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+              </div>
+            </div>
 
-          <div className="text-center">
-            <span className="text-gray-400">Already have an account? </span>
-            <Link
-              to="/agent/login"
-              className="text-indigo-400 hover:text-indigo-300"
+            <div>
+              <label className="block text-sm font-medium text-gray-400 mb-2">
+                Confirm Password
+              </label>
+              <div className="relative">
+                <input
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  name="confirmPassword"
+                  required
+                  value={formData.confirmPassword}
+                  onChange={handleChange}
+                  className="w-full bg-gray-700/50 text-white rounded-lg pl-4 pr-10 py-3 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  placeholder="Confirm your password"
+                  minLength={6}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className="absolute right-3 top-3.5 text-gray-400 hover:text-gray-300"
+                >
+                  {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+              </div>
+            </div>
+
+            {error && (
+              <div className="flex items-center space-x-2 text-red-400 bg-red-400/10 p-3 rounded-lg">
+                <AlertCircle className="h-5 w-5" />
+                <p className="text-sm">{error}</p>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-emerald-500 text-white py-3 px-4 rounded-lg
+                hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed
+                transition-colors duration-200"
             >
-              Sign in
-            </Link>
-          </div>
-        </form>
+              {loading ? 'Creating Account...' : 'Complete Registration'}
+            </button>
+
+            <p className="text-sm text-gray-400 text-center">
+              By registering, you agree to our Terms of Service and Privacy Policy
+            </p>
+          </form>
+        </div>
       </div>
     </div>
   );

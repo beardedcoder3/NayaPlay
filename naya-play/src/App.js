@@ -54,6 +54,68 @@ import VerificationRoute from './VerificationRoute';
 import DiceGame from './Games/Dice';
 import { ErrorProvider } from './Error/ErrorContext';
 import AnimatedHelpWidget from './LiveSupportSystem/AnimatedHelpWidget';
+import MaintenancePage from './ForNow';
+import { serverTimestamp } from 'firebase/firestore';
+import RouletteGame from './Games/Wheel';
+import Keno from "./Games/Keno"
+
+
+const NoLayoutRoute = ({ children }) => {
+  const { user, loading } = useAuth();
+  const navigate = useNavigate();
+  const [isChecking, setIsChecking] = useState(true);
+
+  useEffect(() => {
+    const checkAccess = async () => {
+      if (!loading) {
+        if (!user) {
+          navigate('/', { replace: true });
+          return;
+        }
+
+        try {
+          const userDoc = await getDoc(doc(db, 'users', user.uid));
+          const userData = userDoc.data();
+          
+          // Check if path is agent dashboard and user is an agent
+          if (window.location.pathname === '/agent/dashboard') {
+            if (userData?.role !== 'agent') {
+              navigate('/', { replace: true });
+              return;
+            }
+          }
+          
+          // Existing support agent check
+          if (window.location.pathname === '/support-agent/dashboard') {
+            const agentDoc = await getDoc(doc(db, 'supportAgents', user.uid));
+            if (!agentDoc.exists() || agentDoc.data().status !== 'approved') {
+              navigate('/support-agent/login', { replace: true });
+              return;
+            }
+          }
+        } finally {
+          setIsChecking(false);
+        }
+      }
+    };
+
+    checkAccess();
+  }, [user, loading, navigate]);
+
+  if (loading || isChecking) {
+    return <LoadingSpinner />;
+  }
+
+  if (!user) {
+    return null;
+  }
+
+  // Return children directly without Layout wrapper
+  return <>{children}</>;
+};
+
+
+
 
 const Layout = ({ children }) => {
   const { isExpanded } = useSidebar();
@@ -98,28 +160,33 @@ const ProtectedRoute = ({ children, requiredRole }) => {
         }
 
         try {
-          // Get user data from Firestore
-          const userDoc = await getDoc(doc(db, 'users', user.uid));
-          const userData = userDoc.data();
-          
-          // Check if email is verified in Firestore
-          if (!userData?.emailVerified && !localStorage.getItem('setupChoice')) {
-            navigate('/verify-email', { replace: true });
-            return;
-          }
-
-          // Role checks
+          // First check if this is a support agent route
           if (requiredRole === 'support_agent') {
             const agentDoc = await getDoc(doc(db, 'supportAgents', user.uid));
             if (!agentDoc.exists() || agentDoc.data().status !== 'approved') {
               navigate('/support-agent/login', { replace: true });
               return;
             }
+            // If it's a valid support agent, allow access without email verification check
+            setIsChecking(false);
+            return;
           }
 
-          const role = userData?.role;
+          // For non-support agent routes, proceed with regular user checks
+          const userDoc = await getDoc(doc(db, 'users', user.uid));
+          const userData = userDoc.data();
+          
+          // Only check email verification for regular users
+          if (!userData?.emailVerified && 
+              !localStorage.getItem('setupChoice') && 
+              !requiredRole && // Skip for special roles like 'agent'
+              location.pathname !== '/verify-email') {
+            navigate('/verify-email', { replace: true });
+            return;
+          }
 
-          if (requiredRole === 'agent' && role !== 'agent') {
+          // Role-specific checks
+          if (requiredRole === 'agent' && userData?.role !== 'agent') {
             navigate('/', { replace: true });
             return;
           }
@@ -129,7 +196,7 @@ const ProtectedRoute = ({ children, requiredRole }) => {
             return;
           }
 
-          if (role === 'agent' && window.location.pathname === '/app') {
+          if (userData?.role === 'agent' && window.location.pathname === '/app') {
             navigate('/agent/dashboard', { replace: true });
             return;
           }
@@ -142,7 +209,6 @@ const ProtectedRoute = ({ children, requiredRole }) => {
     checkAccess();
   }, [user, loading, navigate, requiredRole, isAdmin, location]);
 
-  // Show loading spinner only during initial check
   if (loading || isChecking) {
     return <LoadingSpinner />;
   }
@@ -154,7 +220,6 @@ const ProtectedRoute = ({ children, requiredRole }) => {
   return <Layout>{children}</Layout>;
 };
 
-
 function AppContent() {
   const { user } = useAuth();
   const [showNotification, setShowNotification] = useState(false);
@@ -164,35 +229,59 @@ function AppContent() {
     let unsubscribe;
   
     const setupListener = async () => {
-      // Don't set up listener if registration is in progress
       const isRegistering = sessionStorage.getItem('registrationInProgress');
       if (!user?.uid || isRegistering) {
         return;
       }
   
       try {
-        // Add delay to ensure Firestore rules are propagated
-        await new Promise(resolve => setTimeout(resolve, 2000));
-  
         const notificationsQuery = query(
           collection(db, 'notifications'),
           where('userId', '==', user.uid),
           where('seen', '==', false),
-          where('type', '==', 'payment_received')
+          where('type', 'in', ['payment_received', 'agent_transfer'])
         );
   
         unsubscribe = onSnapshot(notificationsQuery, {
           next: async (snapshot) => {
             if (!snapshot.empty) {
-              // ... rest of your notification handling code
+              const notification = snapshot.docs[0];
+              const notificationData = notification.data();
+              console.log('New notification received:', notificationData);
+
+              // Set the transaction data directly from the notification
+              // instead of trying to fetch the agentTransaction
+              const transactionData = {
+                id: notification.id,
+                amount: notificationData.amount,
+                timestamp: notificationData.timestamp?.toDate?.() || new Date(),
+                agentUsername: notificationData.agentUsername || 'Anonymous',
+                type: notificationData.type,
+                status: 'completed'
+              };
+
+              console.log('Setting current transaction:', transactionData);
+              
+              setCurrentTransaction(transactionData);
+              setShowNotification(true);
+
+              // Mark notification as seen
+              try {
+                await updateDoc(doc(db, 'notifications', notification.id), {
+                  seen: true,
+                  seenAt: serverTimestamp()
+                });
+              } catch (error) {
+                console.error('Error marking notification as seen:', error);
+              }
             }
+          },
+          error: (error) => {
+            console.error('Notification listener error:', error);
           }
         });
       } catch (error) {
-        // Silently fail for permission errors during registration
-        if (error.code !== 'permission-denied') {
-          console.error('Error setting up notification listener:', error);
-        }
+        console.error('Error setting up notification listener:', error);
       }
     };
   
@@ -204,6 +293,7 @@ function AppContent() {
       }
     };
   }, [user]);
+
 
   // Helper function to check verification status
   const needsVerification = () => {
@@ -219,26 +309,26 @@ function AppContent() {
         <Routes>
           {/* Public Route */}
           <Route path="/" element={
-            user ? (
-              needsVerification() ? (
-                <Navigate to="/verify-email" replace />
-              ) : (
-                <Navigate to="/app" replace />
-              )
-            ) : (
-              <Layout>
-                <HeroSection />
-                <CasinoBanner />
-                <FeatureItem />
-                <PaymentOptions />
-                <VIPSection />
-                <SupportSection />
-                <LiveBetLobby />
-                <FAQSection />
-              </Layout>
-            )
-          } />
-
+  user ? (
+    needsVerification() ? (
+      <Navigate to="/verify-email" replace />
+    ) : (
+      <Navigate to="/app" replace />
+    )
+  ) : (
+    // <MaintenancePage />
+    <Layout>
+      <HeroSection />
+      <CasinoBanner />
+      <FeatureItem />
+      <PaymentOptions />
+      <VIPSection />
+      <SupportSection />
+      <LiveBetLobby />
+      <FAQSection />
+    </Layout>
+  )
+} />
           {/* Verification Route */}
        
           <Route 
@@ -271,6 +361,8 @@ function AppContent() {
 
           {/* Keep all remaining routes the same */}
           <Route path="/mines" element={<ProtectedRoute><><MasterMineGame /><LiveBetLobby /></></ProtectedRoute>} />
+          <Route path="/keno" element={<ProtectedRoute><><Keno /><LiveBetLobby /></></ProtectedRoute>} />
+          <Route path="/wheel" element={<ProtectedRoute><><RouletteGame /><LiveBetLobby /></></ProtectedRoute>} />
           <Route path="/dice" element={<ProtectedRoute><><DiceGame /><LiveBetLobby /></></ProtectedRoute>} />
           <Route path="/limbo" element={<ProtectedRoute><><Limbo /><LiveBetLobby /></></ProtectedRoute>} />
           <Route path="/crash" element={<ProtectedRoute><><Crash /><LiveBetLobby /></></ProtectedRoute>} />
@@ -280,11 +372,32 @@ function AppContent() {
           <Route path="/my-bets" element={<ProtectedRoute><MyBetsPage /></ProtectedRoute>} />
           <Route path={ADMIN_CONFIG.SECURE_PATH} element={<AdminLogin />} />
           <Route path={`${ADMIN_CONFIG.SECURE_PATH}/dashboard/*`} element={<AdminDashboard />} />
-          <Route path="/agent/dashboard" element={<ProtectedRoute requiredRole="agent"><AgentDashboard /></ProtectedRoute>} />
+     
           <Route path="/agent/login" element={<AgentLogin />} />
           <Route path="/agent/register" element={<AgentRegistration />} />
-          <Route path="/support-agent/dashboard" element={<ProtectedRoute requiredRole="support_agent"><SupportAgentDashboard /></ProtectedRoute>} />
-          <Route path="/support-agent/login" element={<SupportAgentLogin />} />
+
+          <Route 
+            path="/agent/dashboard" 
+            element={
+              <NoLayoutRoute>
+                <AgentDashboard />
+              </NoLayoutRoute>
+            } 
+          />
+
+
+
+          <Route 
+    path="/support-agent/dashboard" 
+    element={
+      <NoLayoutRoute>
+        <SupportAgentDashboard />
+      </NoLayoutRoute>
+    } 
+  />
+  <Route path="/support-agent/login" element={<SupportAgentLogin />} />
+  <Route path="/support-agent/register" element={<SupportAgentRegistration />} />
+         
           <Route path="/support-agent/register" element={<SupportAgentRegistration />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

@@ -590,56 +590,44 @@ const ModernSupportWidget = () => {
     const files = e.dataTransfer.files;
     handleFileUpload(files);
   };
-
   const handleSendMessage = async (e) => {
     e.preventDefault();
     if ((!message.trim() && attachments.length === 0) || !activeTicket) return;
-
-    setLoading(true);
+  
+    const messageContent = message.trim();
+    setMessage(''); // Clear message immediately for better UX
+    
     try {
-      let uploadedFiles = [];
-      if (attachments.length > 0) {
-        uploadedFiles = await Promise.all(
-          attachments.map(async (file) => {
-            const result = await uploadFileToS3(file, activeTicket.id);
-            return {
-              name: file.name,
-              url: result.url,
-              type: file.type
-            };
-          })
-        );
-      }
-
-      if (message.trim() || uploadedFiles.length > 0) {
+      if (messageContent || attachments.length > 0) {
         const messageRef = await addDoc(collection(db, 'supportMessages'), {
           ticketId: activeTicket.id,
-          content: message.trim(),
+          content: messageContent,
           sender: user.uid,
           senderType: 'user',
           timestamp: serverTimestamp(),
-          attachments: uploadedFiles,
           status: 'sent',
           read: false
         });
-
-        setTimeout(() => updateMessageStatus(messageRef.id, 'delivered'), 1000);
+  
+        // Update ticket status immediately
+        await updateDoc(doc(db, 'supportTickets', activeTicket.id), {
+          lastUpdated: serverTimestamp(),
+          status: 'waiting',
+          lastMessage: messageContent || 'Sent attachments'
+        });
+  
+        // Update to delivered immediately instead of using setTimeout
+        await updateDoc(doc(db, 'supportMessages', messageRef.id), {
+          status: 'delivered'
+        });
       }
-
-      await updateDoc(doc(db, 'supportTickets', activeTicket.id), {
-        lastUpdated: serverTimestamp(),
-        status: 'waiting',
-        lastMessage: message.trim() || 'Sent attachments'
-      });
-
-      setMessage('');
+  
       setAttachments([]);
     } catch (error) {
       console.error('Error sending message:', error);
+      // Optionally handle error state here
     }
-    setLoading(false);
   };
-
   const createNewTicket = async () => {
     if (!subject.trim() || !category) return;
 

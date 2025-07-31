@@ -11,120 +11,73 @@ import {
   orderBy,
   serverTimestamp,
   getDoc,
-  getDocs,
-  limit,
   writeBatch
 } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import { 
   LogOut, 
-  MessageSquare, 
-  Clock,
-  CheckCircle, 
-  XCircle,
+  MessageSquare,
   Send,
   Loader,
   User,
-  Filter,
-  AlertCircle,
-  FileText,
-  Smile,
-  Paperclip,
-  Star,
-  List,
   Search,
-  ChevronLeft,
-  Settings,
-  Bell,
+  CheckCircle,
+  Clock,
+  X,
+  MessageCircle,
+  Calendar,
   Plus,
-  Check,
-  CheckCheck,
-  Upload,
-  File
+  AlertCircle
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
 import EmojiPicker from 'emoji-picker-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const CATEGORIES = [
-  { id: 'payment', label: 'Payment Issue', icon: '💳', color: 'from-violet-500 to-purple-600' },
-  { id: 'technical', label: 'Technical Support', icon: '🔧', color: 'from-blue-500 to-indigo-600' },
-  { id: 'account', label: 'Account Help', icon: '👤', color: 'from-emerald-500 to-teal-600' },
-  { id: 'general', label: 'General Question', icon: '❓', color: 'from-pink-500 to-rose-600' }
+  { id: 'payment', label: 'Payment Issue', icon: '💳' },
+  { id: 'technical', label: 'Technical Support', icon: '🔧' },
+  { id: 'account', label: 'Account Help', icon: '👤' },
+  { id: 'general', label: 'General Question', icon: '❓' }
 ];
 
-const PRIORITIES = {
-  high: {
-    label: 'High Priority',
-    color: 'bg-rose-900 text-rose-200',
-    icon: '🔴'
-  },
-  medium: {
-    label: 'Medium Priority',
-    color: 'bg-amber-900 text-amber-200',
-    icon: '🟡'
-  },
-  low: {
-    label: 'Low Priority',
-    color: 'bg-emerald-900 text-emerald-200',
-    icon: '🟢'
-  }
-};
-
 const QUICK_REPLIES = [
-  {
-    id: 'greeting',
-    text: "Hi! How can I help you today?",
-    icon: '👋'
-  },
-  {
-    id: 'understanding',
-    text: "I understand your concern. Let me help you with that.",
-    icon: '👍'
-  },
-  {
-    id: 'details',
-    text: "Could you please provide more details?",
-    icon: '🤔'
-  },
-  {
-    id: 'checking',
-    text: "Let me check that for you.",
-    icon: '🔍'
-  },
-  {
-    id: 'followup',
-    text: "Is there anything else I can help you with?",
-    icon: '✨'
-  }
+  { id: 'greeting', text: "Hi! How can I help you today?", icon: '👋' },
+  { id: 'understanding', text: "I understand your concern. Let me help you with that.", icon: '👍' },
+  { id: 'checking', text: "Let me check that for you.", icon: '🔍' },
+  { id: 'escalate', text: "I'll need to escalate this to our specialist team.", icon: '⚡' }
 ];
 
 const StatusBadge = ({ status }) => {
-  const statusStyles = {
-    active: 'bg-emerald-900 text-emerald-200',
-    waiting: 'bg-amber-900 text-amber-200',
-    closed: 'bg-gray-800 text-gray-300'
+  const statusConfig = {
+    active: { bg: 'bg-emerald-500/10', text: 'text-emerald-400', icon: MessageCircle },
+    waiting: { bg: 'bg-amber-500/10', text: 'text-amber-400', icon: Clock },
+    closed: { bg: 'bg-gray-500/10', text: 'text-gray-400', icon: CheckCircle }
   };
 
+  const config = statusConfig[status] || statusConfig.closed;
+  const Icon = config.icon;
+
   return (
-    <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusStyles[status] || statusStyles.closed}`}>
+    <span className={`px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1.5 ${config.bg} ${config.text}`}>
+      <Icon className="w-3 h-3" />
       {status}
     </span>
   );
 };
 
 const MessageStatus = ({ status }) => {
-  const statusMap = {
-    sent: <Clock className="h-3 w-3 text-gray-400" />,
-    delivered: <Check className="h-3 w-3 text-gray-400" />,
-    seen: <CheckCheck className="h-3 w-3 text-blue-400" />
-  };
-
-  return (
-    <div className="inline-flex items-center">
-      {statusMap[status]}
-    </div>
-  );
+  if (status === 'seen') return <CheckCircle className="h-3 w-3 text-emerald-400" />;
+  if (status === 'delivered') return <CheckCircle className="h-3 w-3 text-indigo-400" />;
+  return <Clock className="h-3 w-3 text-gray-400" />;
 };
+
+const LoadingSpinner = () => (
+  <div className="flex-1 flex items-center justify-center bg-[#1a1b1e] min-h-screen">
+    <div className="flex flex-col items-center gap-3">
+      <Loader className="w-8 h-8 text-indigo-500 animate-spin" />
+      <p className="text-gray-400 animate-pulse">Loading dashboard...</p>
+    </div>
+  </div>
+);
 
 const SupportAgentDashboard = () => {
   const [tickets, setTickets] = useState([]);
@@ -136,24 +89,17 @@ const SupportAgentDashboard = () => {
   const [agentStatus, setAgentStatus] = useState('online');
   const [userInfo, setUserInfo] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const [selectedPriority, setSelectedPriority] = useState('all');
+  const [viewMode, setViewMode] = useState('waiting');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const messagesEndRef = useRef(null);
   const navigate = useNavigate();
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
 
 
   
 
-  // Verify agent authentication and status
+
   useEffect(() => {
     if (!auth.currentUser) {
       navigate('/support-agent/login');
@@ -173,6 +119,7 @@ const SupportAgentDashboard = () => {
         }
 
         setAgentData(agentData);
+        setAgentStatus(agentData.status || 'online');
       } catch (error) {
         console.error('Error verifying agent:', error);
         navigate('/support-agent/login');
@@ -182,23 +129,23 @@ const SupportAgentDashboard = () => {
     fetchAgentData();
   }, [navigate]);
 
-  // Load and filter tickets
   useEffect(() => {
-    if (!auth.currentUser || !agentData) return;
+    if (!auth.currentUser || !agentData || agentStatus === 'busy') return;
 
     let q = query(
       collection(db, 'supportTickets'),
-      where('status', 'in', ['waiting', 'active']),
-      orderBy('priority', 'desc'),
-      orderBy('createdAt', 'desc')
+      where('status', '==', viewMode),
+      orderBy('lastUpdated', 'desc')
     );
 
     if (selectedCategory !== 'all') {
       q = query(q, where('category', '==', selectedCategory));
     }
 
-    if (selectedPriority !== 'all') {
-      q = query(q, where('priority', '==', selectedPriority));
+    if (agentStatus === 'online') {
+      q = query(q, where('assignedAgent', 'in', [null, auth.currentUser.uid]));
+
+      
     }
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -207,10 +154,9 @@ const SupportAgentDashboard = () => {
         ...doc.data()
       }));
 
-      // Apply search filter if exists
       const filteredTickets = searchTerm 
         ? ticketData.filter(ticket => 
-            ticket.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            ticket.subject?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             ticket.id.toLowerCase().includes(searchTerm.toLowerCase())
           )
         : ticketData;
@@ -220,30 +166,31 @@ const SupportAgentDashboard = () => {
     });
 
     return () => unsubscribe();
-  }, [auth.currentUser, agentData, selectedCategory, selectedPriority, searchTerm]);
+  }, [auth.currentUser, agentData, agentStatus, viewMode, selectedCategory, searchTerm]);
 
-  // Load messages and user info for selected ticket
   useEffect(() => {
     if (!selectedTicket) return;
-
+  
     const q = query(
       collection(db, 'supportMessages'),
       where('ticketId', '==', selectedTicket.id),
       orderBy('timestamp', 'asc')
     );
-
+  
     const unsubscribe = onSnapshot(q, async (snapshot) => {
       const messageData = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
-
-      // Update message status to seen for user messages
+  
+      // Handle unread messages in a batch
       const batch = writeBatch(db);
       const unreadMessages = messageData.filter(
-        msg => msg.senderType === 'user' && !msg.seen
+        msg => !msg.seen && 
+        ((msg.senderType === 'user' && auth.currentUser.uid !== msg.sender) ||
+         (msg.senderType === 'agent' && auth.currentUser.uid !== msg.sender))
       );
-
+  
       unreadMessages.forEach(msg => {
         const msgRef = doc(db, 'supportMessages', msg.id);
         batch.update(msgRef, { 
@@ -251,53 +198,51 @@ const SupportAgentDashboard = () => {
           status: 'seen'
         });
       });
-
+  
       if (unreadMessages.length > 0) {
         await batch.commit();
       }
-
+  
       setMessages(messageData);
     });
-
-    // Fetch user info and activity
+  
+    // Keep the existing user info fetching
     const fetchUserInfo = async () => {
       try {
-        const [userDoc, ticketsQuery] = await Promise.all([
-          getDoc(doc(db, 'users', selectedTicket.userId)),
-          getDocs(query(
-            collection(db, 'supportTickets'),
-            where('userId', '==', selectedTicket.userId),
-            orderBy('createdAt', 'desc'),
-            limit(5)
-          ))
-        ]);
-
+        const userDoc = await getDoc(doc(db, 'users', selectedTicket.userId));
         if (userDoc.exists()) {
           setUserInfo({
+            id: userDoc.id,
             ...userDoc.data(),
-            previousTickets: ticketsQuery.docs.map(doc => ({
-              id: doc.id,
-              ...doc.data()
-            }))
+            // Ensure default values
+            username: userDoc.data().username || 'N/A',
+            status: userDoc.data().status || 'Active',
+            balance: userDoc.data().balance || 0,
+            lastActive: userDoc.data().lastActive || null,
+            email: userDoc.data().email || 'N/A',
+            createdAt: userDoc.data().createdAt || null
           });
         }
       } catch (error) {
         console.error('Error fetching user info:', error);
+        setUserInfo(null);
       }
     };
-
+  
     fetchUserInfo();
-    return () => unsubscribe();
-  }, [selectedTicket]);
+  }, [selectedTicket?.userId]);
 
-  // Update agent online status
+
+
+  // Note: added auth.currentUser to dependencies
   useEffect(() => {
     if (!auth.currentUser || !agentData) return;
 
     const updateAgentStatus = async () => {
       try {
         await updateDoc(doc(db, 'supportAgents', auth.currentUser.uid), {
-          isOnline: true,
+          isOnline: agentStatus === 'online',
+          status: agentStatus,
           lastActive: serverTimestamp()
         });
       } catch (error) {
@@ -329,19 +274,26 @@ const SupportAgentDashboard = () => {
         });
       }
     };
-  }, [auth.currentUser, agentData]);
+  }, [auth.currentUser, agentData, agentStatus]);
 
-  const handleStatusChange = async (newStatus) => {
-    if (!auth.currentUser) return;
-    
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages]);
+  const handleSignOut = async () => {
     try {
-      setAgentStatus(newStatus);
-      await updateDoc(doc(db, 'supportAgents', auth.currentUser.uid), {
-        status: newStatus,
-        lastActive: serverTimestamp()
-      });
+      if (auth.currentUser) {
+        const agentRef = doc(db, 'supportAgents', auth.currentUser.uid);
+        await updateDoc(agentRef, {
+          isOnline: false,
+          lastActive: serverTimestamp()
+        });
+      }
+      await auth.signOut();
+      navigate('/support-agent/login');
     } catch (error) {
-      console.error('Error updating agent status:', error);
+      console.error('Error signing out:', error);
     }
   };
 
@@ -357,16 +309,8 @@ const SupportAgentDashboard = () => {
         senderType: 'agent',
         timestamp: serverTimestamp(),
         agentName: agentData?.fullName || 'Support Agent',
-        status: 'sent',
-        read: false
+        status: 'sent'
       });
-
-      // Update to delivered after sending
-      setTimeout(async () => {
-        await updateDoc(doc(db, 'supportMessages', messageRef.id), {
-          status: 'delivered'
-        });
-      }, 1000);
 
       await updateDoc(doc(db, 'supportTickets', selectedTicket.id), {
         lastUpdated: serverTimestamp(),
@@ -376,7 +320,12 @@ const SupportAgentDashboard = () => {
         lastMessage: newMessage.trim()
       });
 
+      await updateDoc(doc(db, 'supportMessages', messageRef.id), {
+        status: 'delivered'
+      });
+
       setNewMessage('');
+      setShowEmojiPicker(false);
     } catch (error) {
       console.error('Error sending message:', error);
     }
@@ -384,47 +333,29 @@ const SupportAgentDashboard = () => {
 
   const handleCloseTicket = async () => {
     if (!selectedTicket || !auth.currentUser) return;
-
+  
     try {
       await updateDoc(doc(db, 'supportTickets', selectedTicket.id), {
         status: 'closed',
-        closedAt: serverTimestamp(),
+        lastUpdated: serverTimestamp(),
         closedBy: auth.currentUser.uid,
-        resolution: 'resolved'
+        closedAt: serverTimestamp()
       });
-
-      const messageRef = await addDoc(collection(db, 'supportMessages'), {
+  
+      await addDoc(collection(db, 'supportMessages'), {
         ticketId: selectedTicket.id,
-        content: 'Ticket closed. Thank you for contacting support!',
-        sender: auth.currentUser.uid,
+        content: 'Ticket closed by support agent',
         senderType: 'system',
         timestamp: serverTimestamp(),
         status: 'sent'
       });
-
-      // Update to delivered after sending
-      setTimeout(async () => {
-        await updateDoc(doc(db, 'supportMessages', messageRef.id), {
-          status: 'delivered'
-        });
-      }, 1000);
-
-      setSelectedTicket(null);
+  
+      setSelectedTicket(prev => ({
+        ...prev,
+        status: 'closed'
+      }));
     } catch (error) {
       console.error('Error closing ticket:', error);
-    }
-  };
-
-  const handlePriorityChange = async (newPriority) => {
-    if (!selectedTicket) return;
-
-    try {
-      await updateDoc(doc(db, 'supportTickets', selectedTicket.id), {
-        priority: newPriority,
-        lastUpdated: serverTimestamp()
-      });
-    } catch (error) {
-      console.error('Error updating priority:', error);
     }
   };
 
@@ -443,46 +374,39 @@ const SupportAgentDashboard = () => {
     });
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <div className="p-4 bg-gray-800 rounded-full">
-          <Loader className="w-8 h-8 text-blue-500 animate-spin" />
-        </div>
-      </div>
-    );
+  if (!agentData || loading) {
+    return <LoadingSpinner />;
   }
+
   return (
-    <div className="h-screen flex flex-col bg-gray-900">
-      {/* Fixed Header */}
-      <nav className="h-16 bg-gray-800 border-b border-gray-700">
-        <div className="h-full px-4 flex items-center justify-between">
+    <div className="flex flex-col h-screen bg-[#1a1b1e]">
+      {/* Header */}
+      <nav className="h-16 flex-none bg-[#25262b] border-b border-gray-800 shadow-lg">
+        <div className="h-full px-6 flex items-center justify-between">
           <div className="flex items-center space-x-6">
-            <h1 className="text-white text-xl font-bold">Support Dashboard</h1>
-            <div className="relative">
+            <div className="relative group">
               <input 
                 type="text"
                 placeholder="Search tickets..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="bg-gray-700 text-white rounded-lg pl-10 pr-4 py-2 w-64 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                className="bg-[#2c2d31] text-white rounded-lg pl-10 pr-4 py-2 w-72 focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all duration-200 border border-gray-700 hover:border-gray-600"
               />
-              <Search className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
+              <Search className="absolute left-3 top-2.5 h-5 w-5 text-gray-400 group-hover:text-gray-300 transition-colors" />
             </div>
           </div>
           <div className="flex items-center space-x-4">
             <select
               value={agentStatus}
-              onChange={(e) => handleStatusChange(e.target.value)}
-              className="bg-gray-700 text-white rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              onChange={(e) => setAgentStatus(e.target.value)}
+              className="bg-[#2c2d31] text-white rounded-lg px-4 py-1.5 focus:ring-2 focus:ring-indigo-500 focus:outline-none border border-gray-700 hover:border-gray-600 transition-colors"
             >
               <option value="online">👋 Online</option>
-              <option value="away">🌙 Away</option>
               <option value="busy">⏳ Busy</option>
             </select>
             <button
-              onClick={() => auth.signOut()}
-              className="flex items-center px-4 py-2 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500/20"
+              onClick={handleSignOut}
+              className="flex items-center px-4 py-2 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500/20 transition-colors duration-200"
             >
               <LogOut className="h-4 w-4 mr-2" />
               Sign Out
@@ -491,123 +415,173 @@ const SupportAgentDashboard = () => {
         </div>
       </nav>
 
-      {/* Main Content Area - Fixed Height */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Left Sidebar - Tickets */}
-        <div className="w-80 flex flex-col bg-gray-800 border-r border-gray-700">
-          {/* Filter Section */}
-          <div className="p-4 border-b border-gray-700">
-            <div className="space-y-3">
-              <select
-                value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
-                className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-              >
-                <option value="all">All Categories</option>
-                {CATEGORIES.map(cat => (
-                  <option key={cat.id} value={cat.id}>
-                    {cat.icon} {cat.label}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={selectedPriority}
-                onChange={(e) => setSelectedPriority(e.target.value)}
-                className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-              >
-                <option value="all">All Priorities</option>
-                {Object.entries(PRIORITIES).map(([key, value]) => (
-                  <option key={key} value={key}>
-                    {value.icon} {value.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Tickets List - Scrollable */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-2">
-            {tickets.map((ticket) => (
-              <div
-                key={ticket.id}
-                onClick={() => setSelectedTicket(ticket)}
-                className={`p-3 rounded-lg border transition-all cursor-pointer ${
-                  selectedTicket?.id === ticket.id
-                    ? 'bg-blue-600 border-blue-500'
-                    : 'bg-gray-700 border-gray-600 hover:border-blue-500'
+      {/* Main Content */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Tickets Sidebar */}
+        <div className="w-80 flex flex-col bg-[#25262b] border-r border-gray-800">
+          {/* Filters */}
+          <div className="flex-none p-4 border-b border-gray-800">
+            <div className="flex space-x-2 mb-3">
+              <button
+                onClick={() => setViewMode('waiting')}
+                className={`flex-1 py-2 px-4 rounded-lg font-medium transition-all duration-200 ${
+                  viewMode === 'waiting'
+                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20'
+                    : 'bg-[#2c2d31] text-gray-300 hover:bg-[#34353a]'
                 }`}
               >
-                <div className="flex justify-between items-start mb-1">
-                  <span className={`px-2 py-0.5 rounded text-xs font-medium ${PRIORITIES[ticket.priority].color}`}>
-                    {PRIORITIES[ticket.priority].icon} {ticket.priority}
-                  </span>
-                  <StatusBadge status={ticket.status} />
-                </div>
-                <p className="text-white text-sm font-medium mt-1">#{ticket.id.slice(-6)}</p>
-                <p className="text-gray-300 text-sm truncate">{ticket.subject}</p>
-                <p className="text-gray-400 text-xs mt-1">{formatTime(ticket.createdAt)}</p>
+                Waiting
+              </button>
+              <button
+                onClick={() => setViewMode('active')}
+                className={`flex-1 py-2 px-4 rounded-lg font-medium transition-all duration-200 ${
+                  viewMode === 'active'
+                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20'
+                    : 'bg-[#2c2d31] text-gray-300 hover:bg-[#34353a]'
+                }`}
+              >
+                Active
+              </button>
+            </div>
+            <select
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+              className="w-full bg-[#2c2d31] text-white rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none border border-gray-700 hover:border-gray-600 transition-colors"
+            >
+              <option value="all">All Categories</option>
+              {CATEGORIES.map(cat => (
+                <option key={cat.id} value={cat.id}>
+                  {cat.icon} {cat.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Tickets List */}
+          <div className="flex-1 overflow-y-auto">
+            <AnimatePresence>
+              <div className="p-4 space-y-2">
+                {tickets.map((ticket) => (
+                  <motion.div
+                    key={ticket.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    onClick={() => setSelectedTicket(ticket)}
+                    className={`p-4 rounded-lg cursor-pointer transition-all duration-200 ${
+                      selectedTicket?.id === ticket.id
+                        ? 'bg-indigo-600 shadow-lg shadow-indigo-500/20'
+                        : 'bg-[#2c2d31] hover:bg-[#34353a]'
+                    }`}
+                  >
+                    <div className="flex justify-between items-start mb-2">
+                      <span className="text-xs font-medium text-gray-300">
+                        #{ticket.id.slice(-6)}
+                      </span>
+                      <StatusBadge status={ticket.status} />
+                    </div>
+                    <p className="text-white text-sm font-medium mb-2 line-clamp-2">{ticket.subject}</p>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-400 text-xs flex items-center gap-1">
+                        {CATEGORIES.find(cat => cat.id === ticket.category)?.icon}
+                        {CATEGORIES.find(cat => cat.id === ticket.category)?.label}
+                      </span>
+                      <span className="text-gray-400 text-xs flex items-center gap-1">
+                        <Calendar className="w-3 h-3" />
+                        {formatTime(ticket.lastUpdated || ticket.createdAt)}
+                      </span>
+                    </div>
+                  </motion.div>
+                ))}
               </div>
-            ))}
+            </AnimatePresence>
           </div>
         </div>
 
-        {/* Center - Chat Area */}
-        <div className="flex-1 flex flex-col">
+        {/* Chat Area */}
+        <div className="flex-1 flex flex-col bg-[#1a1b1e] min-w-0">
           {selectedTicket ? (
             <>
               {/* Chat Header */}
-              <div className="h-16 px-4 bg-gray-800 border-b border-gray-700 flex items-center justify-between">
+              <div className="flex-none h-16 px-6 bg-[#25262b] border-b border-gray-800 flex items-center justify-between">
                 <div>
-                  <h2 className="text-white font-medium">
+                  <h2 className="text-white font-medium flex items-center gap-2">
                     #{selectedTicket.id.slice(-6)} - {selectedTicket.subject}
                   </h2>
-                  <p className="text-sm text-gray-400">
-                    Priority: {PRIORITIES[selectedTicket.priority].icon} {selectedTicket.priority}
+                  <p className="text-sm text-gray-400 flex items-center gap-1.5">
+                    {CATEGORIES.find(cat => cat.id === selectedTicket.category)?.icon}
+                    {CATEGORIES.find(cat => cat.id === selectedTicket.category)?.label}
                   </p>
                 </div>
-                <button
-                  onClick={handleCloseTicket}
-                  className="px-4 py-2 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500/20"
-                >
-                  Close Ticket
-                </button>
-              </div>
-
-              {/* Messages Area - Scrollable */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                {messages.map((message) => (
-                  <div
-                    key={message.id}
-                    className={`flex ${message.senderType === 'agent' ? 'justify-end' : 'justify-start'}`}
+                <div className="flex items-center space-x-3">
+                  {selectedTicket.status !== 'closed' && (
+                    <button
+                      onClick={handleCloseTicket}
+                      className="px-4 py-2 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500/20 transition-colors duration-200 flex items-center gap-2"
+                    >
+                      <AlertCircle className="w-4 h-4" />
+                      Close Ticket
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setSelectedTicket(null)}
+                    className="p-2 text-gray-400 hover:text-white rounded-lg transition-colors duration-200"
                   >
-                    <div className={`max-w-[70%] p-3 rounded-xl ${
-                      message.senderType === 'agent'
-                        ? 'bg-blue-600 text-white'
-                        : message.senderType === 'system'
-                          ? 'bg-gray-700/50 text-white text-center w-full'
-                          : 'bg-gray-700 text-white'
-                    }`}>
-                      <p className="text-sm">{message.content}</p>
-                      <div className="flex items-center justify-end space-x-2 mt-1">
-                        <span className="text-xs opacity-70">{formatTime(message.timestamp)}</span>
-                        {message.senderType === 'agent' && <MessageStatus status={message.status || 'sent'} />}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                <div ref={messagesEndRef} />
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
               </div>
 
-              {/* Fixed Input Area */}
-              <div className="h-24 border-t border-gray-700 p-4">
-                <div className="flex space-x-2 mb-2">
-                  {QUICK_REPLIES.slice(0, 3).map((reply) => (
+              {/* Messages */}
+              <div className="flex-1 overflow-y-auto">
+                <div className="p-6 space-y-4">
+                  <AnimatePresence>
+                    {messages.map((message) => (
+                      <motion.div
+                        key={message.id}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0 }}
+                        className={`flex ${message.senderType === 'agent' ? 'justify-end' : 'justify-start'}`}
+                      >
+                        <div
+                          className={`max-w-[70%] p-4 rounded-xl shadow-lg ${
+                            message.senderType === 'agent'
+                              ? 'bg-indigo-600 text-white'
+                              : message.senderType === 'system'
+                                ? 'bg-[#2c2d31] text-white text-center w-full'
+                                : 'bg-[#2c2d31] text-white'
+                          }`}
+                        >
+                          {message.senderType !== 'system' && (
+                            <div className="text-xs opacity-70 mb-1">
+                              {message.senderType === 'agent' ? message.agentName : 'User'}
+                            </div>
+                          )}
+                          <p className="text-sm leading-relaxed">{message.content}</p>
+                          <div className="flex items-center justify-end space-x-2 mt-2">
+                            <span className="text-xs opacity-70">{formatTime(message.timestamp)}</span>
+                            {message.senderType === 'agent' && <MessageStatus status={message.status || 'sent'} />}
+                          </div>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+                  <div ref={messagesEndRef} />
+                </div>
+              </div>
+
+              {/* Message Input */}
+              <div className="flex-none p-4 bg-[#25262b] border-t border-gray-800">
+                <div className="flex gap-2 mb-3 overflow-x-auto scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent">
+                  {QUICK_REPLIES.map((reply) => (
                     <button
                       key={reply.id}
                       onClick={() => setNewMessage(reply.text)}
-                      className="px-3 py-1 bg-gray-700 text-white rounded-full hover:bg-gray-600 text-sm"
+                      className="px-4 py-2 bg-[#2c2d31] text-white rounded-full hover:bg-[#34353a] transition-colors duration-200 text-sm whitespace-nowrap flex items-center gap-2"
                     >
-                      {reply.icon} {reply.text}
+                      <span>{reply.icon}</span>
+                      <span>{reply.text}</span>
                     </button>
                   ))}
                 </div>
@@ -616,100 +590,122 @@ const SupportAgentDashboard = () => {
                     type="text"
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
-                    className="w-full bg-gray-700 text-white rounded-lg pl-4 pr-24 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                    className="w-full bg-[#2c2d31] text-white rounded-lg pl-4 pr-24 py-3 focus:ring-2 focus:ring-indigo-500 focus:outline-none border border-gray-700 hover:border-gray-600 transition-colors"
                     placeholder="Type your message..."
                   />
-                  <div className="absolute right-2 top-1/2 -translate-y-1/2 flex space-x-1">
+                  <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-2">
                     <button
                       type="button"
                       onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                      className="p-1.5 text-gray-400 hover:text-white"
+                      className="p-2 text-gray-400 hover:text-white rounded-lg transition-colors duration-200"
                     >
-                      <Smile className="h-5 w-5" />
+                      {showEmojiPicker ? <X className="h-5 w-5" /> : '😊'}
                     </button>
                     <button
                       type="submit"
                       disabled={!newMessage.trim()}
-                      className="p-1.5 text-blue-500 hover:text-blue-400 disabled:opacity-50"
+                      className="p-2 text-indigo-500 hover:text-indigo-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
                     >
                       <Send className="h-5 w-5" />
                     </button>
                   </div>
                   {showEmojiPicker && (
                     <div className="absolute bottom-full right-0 mb-2">
-                      <EmojiPicker
-                        onEmojiClick={(emojiData) => {
-                          setNewMessage(prev => prev + emojiData.emoji);
-                          setShowEmojiPicker(false);
-                        }}
-                        width={320}
-                        height={400}
-                        theme="dark"
-                      />
+                      <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 20 }}
+                      >
+                        <EmojiPicker
+                          onEmojiClick={(emojiData) => {
+                            setNewMessage(prev => prev + emojiData.emoji);
+                            setShowEmojiPicker(false);
+                          }}
+                          width={320}
+                          height={400}
+                          theme="dark"
+                        />
+                      </motion.div>
                     </div>
                   )}
                 </form>
               </div>
             </>
           ) : (
-            <div className="flex-1 flex items-center justify-center bg-gray-800">
-              <div className="text-center">
-                <MessageSquare className="h-12 w-12 text-gray-500 mx-auto mb-4" />
-                <p className="text-gray-300">Select a ticket to start chatting</p>
-              </div>
+            <div className="flex-1 flex items-center justify-center bg-[#25262b]">
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="text-center"
+              >
+                <MessageSquare className="h-16 w-16 text-gray-500 mx-auto mb-4" />
+                <h3 className="text-white text-lg font-medium mb-2">No Ticket Selected</h3>
+                <p className="text-gray-400">Select a ticket from the list to start chatting</p>
+              </motion.div>
             </div>
           )}
         </div>
 
-        {/* Right Sidebar - User Info */}
+        {/* User Info Sidebar */}
         {selectedTicket && userInfo && (
-          <div className="w-80 bg-gray-800 border-l border-gray-700 overflow-y-auto">
-            <div className="p-4">
-              <div className="mb-4">
-                <div className="flex items-center space-x-3">
-                  <div className="h-10 w-10 rounded-full bg-blue-500/10 flex items-center justify-center">
-                    <User className="h-5 w-5 text-blue-400" />
-                  </div>
-                  <div>
-                    <h3 className="text-white font-medium">{userInfo.email}</h3>
-                    <p className="text-sm text-gray-400">
-                      Member since {new Date(userInfo.createdAt?.seconds * 1000).toLocaleDateString()}
-                    </p>
+          <motion.div
+            initial={{ width: 0, opacity: 0 }}
+            animate={{ width: 320, opacity: 1 }}
+            exit={{ width: 0, opacity: 0 }}
+            className="flex flex-col bg-[#25262b] border-l border-gray-800"
+          >
+            <div className="flex-1 overflow-y-auto">
+              <div className="p-6">
+                <div className="mb-6">
+                  <div className="flex items-center space-x-4">
+                    <div className="h-12 w-12 rounded-full bg-indigo-600/10 flex items-center justify-center">
+                      <User className="h-6 w-6 text-indigo-400" />
+                    </div>
+                    <div>
+                      <h3 className="text-white font-medium">{userInfo.email}</h3>
+                      <p className="text-sm text-gray-400">
+                        Member since {userInfo.createdAt?.seconds ? new Date(userInfo.createdAt.seconds * 1000).toLocaleDateString() : 'N/A'}
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <div className="space-y-4">
-                {/* Previous Tickets */}
-                <div>
-                  <h4 className="text-white font-medium mb-2">Previous Tickets</h4>
-                  <div className="space-y-2">
-                    {userInfo.previousTickets?.slice(0, 3).map((ticket) => (
-                      <div
-                        key={ticket.id}
-                        className="p-2 bg-gray-700 rounded-lg"
-                      >
-                        <p className="text-sm text-white">{ticket.subject}</p>
-                        <p className="text-xs text-gray-400">
-                          {new Date(ticket.createdAt?.seconds * 1000).toLocaleDateString()}
-                        </p>
+                <div className="space-y-4">
+                  {/* User Info Cards */}
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-[#2c2d31] rounded-lg p-4 border border-gray-700"
+                  >
+                    <h4 className="text-white font-medium mb-3 flex items-center gap-2">
+                      <User className="h-4 w-4 text-indigo-400" />
+                      Account Details
+                    </h4>
+                    <div className="space-y-3 text-sm">
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-400">Username</span>
+                        <span className="text-white font-medium">{userInfo.username}</span>
                       </div>
-                    ))}
-                  </div>
-                </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-400">Status</span>
+                        <span className="text-white font-medium">{userInfo.status || 'Active'}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-400">Balance</span>
+                        <span className="text-white font-medium">${userInfo.balance?.toFixed(2) || '0.00'}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-400">Last Active</span>
+                        <span className="text-white font-medium">{formatTime(userInfo.lastActive)}</span>
+                      </div>
+                    </div>
+                  </motion.div>
 
-                {/* Notes */}
-                <div>
-                  <h4 className="text-white font-medium mb-2">Notes</h4>
-                  <textarea
-                    className="w-full bg-gray-700 text-white rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none resize-none"
-                    placeholder="Add notes about this user..."
-                    rows={3}
-                  />
+                  {/* Additional User Info Sections can be added here */}
                 </div>
               </div>
             </div>
-          </div>
+          </motion.div>
         )}
       </div>
     </div>
